@@ -10,10 +10,12 @@ package mu2etools;
 use strict;
 use Cwd 'abs_path';
 use File::Basename;
+use Digest;
 
 use Class::Struct Mu2eFileName =>
     [tier=>'$', owner=>'$', description=>'$', configuration=>'$', sequencer=>'$', extension=>'$' ];
 
+our $dataroot = "/pnfs/mu2e/persistent/projects/production/data";
 
 #================================================================
 sub parseMu2eFileName($) {
@@ -34,6 +36,7 @@ sub parseMu2eFileName($) {
         );
 }
 
+#================================================================
 sub makeMu2eDatasetName($) {
     my ($fields) = @_;
 
@@ -45,6 +48,35 @@ sub makeMu2eDatasetName($) {
                  ## $fields->sequencer,
                  $fields->extension)
         );
+}
+
+#================================================================
+sub stdPathName($) {
+    my ($filename) = @_;
+
+    die "stdPathName(): arg should be a base name of a file without a path.  Got: $filename\n"
+        if $filename =~ m|/|;
+
+    # the "spreader" directory names are based on SHA256
+    my $dig = Digest->new('SHA-256');
+    $dig->add($filename);
+    my $hash = $dig->hexdigest;
+    my @hh = split //, $hash, 7;
+
+    my $fn = parseMu2eFileName($filename);
+
+    my $stdpath = $dataroot
+        . '/' . $fn->tier
+        . '/' . $fn->owner
+        . '/' . $fn->description
+        . '/' . $fn->configuration
+        . '/' . $hh[0] . $hh[1]
+        . '/' . $hh[2] . $hh[3]
+        . '/' . $hh[4] . $hh[5]
+        . '/' . $filename
+        ;
+
+    return $stdpath;
 }
 
 #================================================================
@@ -60,7 +92,11 @@ BEGIN {
 
     # your exported package globals go here,
     # as well as any optionally exported functions
-    @EXPORT_OK   = qw( &parseMu2eFileName &makeMu2eDatasetName );
+    @EXPORT_OK   = qw( $dataroot
+                       &parseMu2eFileName
+                       &makeMu2eDatasetName
+                       &stdPathName
+    );
 }
 our @EXPORT_OK;
 use vars @EXPORT_OK;
