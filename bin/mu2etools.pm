@@ -23,7 +23,10 @@ use constant fclkey_randomSeed => 'services.SeedService.baseSeed';
 use constant fclkey_TFileServiceFN => 'services.TFileService.fileName';
 use constant fclkey_outModFMT => 'outputs.%s.fileName';
 
-use constant tarball_setup => 'Code/setup.sh';
+use constant filename_json => 'jobpars.json';
+use constant filename_fcl => 'mu2e.fcl';
+use constant filename_tarball => 'code.tar';
+use constant filename_tarsetup => 'Code/setup.sh';
 
 #================================================================
 sub doubleQuote($) {
@@ -41,8 +44,11 @@ our @EXPORT      = qw(
                       fclkey_randomSeed
                       fclkey_TFileServiceFN
                       fclkey_outModFMT
-                      tarball_setup
-    );
+                      filename_json
+                      filename_fcl
+                      filename_tarball
+                      filename_tarsetup
+   );
 
 #================================================================
 1;
