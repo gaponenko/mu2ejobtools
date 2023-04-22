@@ -23,6 +23,8 @@ use constant fclkey_randomSeed => 'services.SeedService.baseSeed';
 use constant fclkey_TFileServiceFN => 'services.TFileService.fileName';
 use constant fclkey_outModFMT => 'outputs.%s.fileName';
 
+use constant tarball_setup => 'Code/setup.sh';
+
 #================================================================
 sub doubleQuote($) {
     my ($fn) = @_;
@@ -39,6 +41,7 @@ our @EXPORT      = qw(
                       fclkey_randomSeed
                       fclkey_TFileServiceFN
                       fclkey_outModFMT
+                      tarball_setup
     );
 
 #================================================================
