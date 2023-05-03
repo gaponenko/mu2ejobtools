@@ -25,6 +25,11 @@ use constant filename_fcl => 'mu2e.fcl';
 use constant filename_tarball => 'code.tar';
 use constant filename_tarsetup => 'Code/setup.sh';
 
+use constant proto_file => 'file';
+use constant proto_root => 'root';
+
+use constant location_local => 'local'; # others come from Mu2eFNBase.pm
+
 #================================================================
 sub doubleQuote($) {
     my ($fn) = @_;
@@ -43,6 +48,9 @@ our @EXPORT      = qw(
                       filename_fcl
                       filename_tarball
                       filename_tarsetup
+                      proto_file
+                      proto_root
+                      location_local
    );
 
 #================================================================
