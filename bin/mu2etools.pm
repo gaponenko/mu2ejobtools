@@ -10,6 +10,7 @@ use parent qw(Exporter);
 
 use strict;
 use Cwd 'abs_path';
+use Archive::Tar;
 use POSIX qw(ceil);
 use English qw( -no_match_vars ) ; # Avoids regex performance penalty
 
@@ -37,6 +38,22 @@ sub doubleQuote($) {
 }
 
 #================================================================
+sub get_tar_member($$) {
+    my ($archive, $membername) = @_;
+    my $tar = Archive::Tar->new();
+    my $res;
+    if ( $tar->read($archive, 1,
+                    { filter => qr{^$membername$},
+                      limit => 1 # avoid reading the possible code tarball
+                    } )
+        )
+    {
+        $res = $tar->get_content($membername);
+    }
+    return $res;
+}
+
+#================================================================
 our $VERSION = '1.00';
 
 our @EXPORT      = qw(
@@ -51,6 +68,8 @@ our @EXPORT      = qw(
                       proto_file
                       proto_root
                       location_local
+
+                      get_tar_member
    );
 
 #================================================================
