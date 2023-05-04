@@ -457,6 +457,17 @@ foreach my $str (@auxinputStrSpecs) {
 }
 
 #================================================================
+# Define the full job name
+my $jn = Mu2eFilename->new;
+$jn->tier('cnf');
+$jn->owner($dsowner);
+$jn->configuration($dsconf);
+$jn->description($jobdesc);
+$jn->sequencer('0');
+$jn->extension('tar');
+my $jobname = $jn->basename;
+
+#================================================================
 # Identify all the output files, the grid proces will need
 # to update their names
 my %outtable;
@@ -607,6 +618,7 @@ my $tar = Archive::Tar->new;
 $tbs{'seed'} = fclkey_randomSeed if seedNeeded($templateresolved);
 
 my %pars = (
+    jobname => $jobname,
     code => $code ? filename_tarball : "",
     setup => $setup,
     tbs => \%tbs,
@@ -663,14 +675,9 @@ if($code) {
 }
 
 #================================================================
-my $fn = Mu2eFilename->new;
-$fn->tier('cnf');
-$fn->owner($dsowner);
-$fn->configuration($dsconf);
-$fn->description($jobdesc);
-$fn->sequencer('0');
-$fn->extension('tar');
-my $outfilename = $fn->basename;
+# write out the output
+
+my $outfilename = $jobname;
 
 { no autodie qw(sysopen);
   sysopen(my $ofh, $outfilename, O_CREAT | O_EXCL | O_WRONLY)
