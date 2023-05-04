@@ -1,0 +1,179 @@
+#!/usr/bin/perl -w
+#
+# A.Gaponenko, 2023
+#
+
+use Getopt::Long;
+use File::Basename;
+use Cwd 'abs_path';
+use Fcntl qw(:DEFAULT);
+use JSON;
+use Archive::Tar;
+use English qw( -no_match_vars ) ; # Avoids regex performance penalty
+use strict;
+use warnings;
+no warnings 'portable'; # otherwise complaints about exceeding 32-bit integers
+
+use Mu2eFilename;
+use Mu2eDSName;
+
+use lib dirname($0);
+use mu2etools;
+
+use Data::Dumper; # for debugging
+
+#================================================================
+sub usage() {
+    my $self = basename($0);
+    my $protostr = '' . proto_file . ',' . proto_root;
+    my $stdlocs = join ',', Mu2eFNBase::standard_locations();
+    return <<EOF
+Usage:
+        $self \\
+           --parfile=cnf.tar \\
+           --index=<uint> \\
+           [--protocol={$protostr}] \\
+           [--location={$stdlocs,local:dir}] \\
+           [-h|--help]
+
+This script prints out fcl config for a job with the given index in
+the set of jobs defined by the parfile.  If the job needs any inputs,
+their location and access protocol must be specified.
+
+In addition to the Mu2e-standard file locations $stdlocs in /pnfs,
+this script supports 'local' files.  This is useful to run on files
+that have been downloaded (e.g. using ifdh) to a directory on the
+current node; the directory must be specified in this case.  The
+'local' option only makes sense with the 'file' access protocol.
+
+EOF
+}
+
+#================================================================
+my %opt;
+
+GetOptions(\%opt,
+           'parfile=s',
+           'index=i',
+           'protocol=s',
+           'location=s',
+           'help',
+    )
+    or die "\nError processing command line options.\n";
+
+if($opt{'help'}) {
+    print usage();
+    exit 0;
+}
+
+#================================================================
+# Check the fundamentals
+
+die "Error: --parfile is required\n" unless $opt{'parfile'};
+my $pfname = $opt{'parfile'};
+die "Error: $pfname is not a file\n" unless -f $pfname;
+die "Error: file $pfname is not readable\n" unless -r $pfname;
+
+die "Error: --index is required\n" unless $opt{'index'};
+my $index = $opt{'index'};
+die "Error: --index must be non-negative, got: $index\n" if $index < 0;
+
+#================================================================
+# Look at the json to determine if --protocol and --location are required
+
+my $proto = $opt{'protocol'};
+my $loc = $opt{'location'};
+my $dirprefix = ''; # used for the 'local' location
+
+my $jsstr = get_tar_member($pfname, filename_json);
+die "Error: could not extract '". filename_json ."' from '$pfname'\n"
+    unless defined $jsstr;
+
+my $js = JSON->new->decode($jsstr);
+my $tbs = $js->{'tbs'};
+die "Error: could not extract tbs from the json\n"
+    unless defined $tbs;
+
+# Input files can come from inputs or auxin blocks
+if($tbs->{'inputs'} || $tbs->{'auxin'}) {
+
+    die "Error --protocol must be specified for job configs that use input files.\n"
+        unless defined $proto;
+
+    ($proto eq proto_file) or ($proto eq proto_root)
+        or die "Error: unknown protocol $proto\n";
+
+    die "Error --location must be specified for job configs that use input files.\n"
+    unless defined $loc;
+
+    unless (grep  /^$loc$/, Mu2eFNBase::standard_locations()) {
+        # non-standard file location
+        my @toks = split /:/, $loc, 2;
+
+        die "Error: unknown location ",$toks[0],"\n"
+            unless $toks[0] eq location_local;
+
+        $loc = location_local;
+        die "Error: directory prefix must be spedified for the ".location_local." case\n"
+            unless defined $toks[1] and $toks[1] ne '';
+        $dirprefix = $toks[1];
+
+        die "Error: location $loc only makes sense for the 'file' protocol, got $proto\n"
+            unless $proto eq proto_file;
+    }
+
+    #print "Using protocol $proto location $loc dirprefix $dirprefix\n";
+}
+
+#================================================================
+my $fb =
+    "#----------------------------------------------------------------\n".
+    "# Code added by mu2ejobfcl:\n";
+
+#----------------------------------------------------------------
+if($tbs->{'event_id'}) {
+    my $evid = $tbs->{'event_id'};
+    while(my($k, $v) = each %$evid) {
+        $fb .= $k . ': ' . $v . ",\n";
+    }
+    $fb .= "source.firstSubRun: $index\n";
+}
+
+#----------------------------------------------------------------
+if($tbs->{'inputs'}) {
+    my ($k, $v) = each($tbs->{'inputs'});
+    my $numfiles = $v->[0];
+    my $filelist = $v->[1];
+
+    my @jobinputs = file_inputs($index, $numfiles, $filelist);
+}
+
+#----------------------------------------------------------------
+if($tbs->{'outfiles'}) {
+}
+
+#----------------------------------------------------------------
+if($tbs->{'auxin'}) {
+}
+
+#----------------------------------------------------------------
+if($tbs->{'seed'}) {
+    $fb .= $tbs->{'seed'} . ": " . $index . "\n";
+}
+
+#----------------------------------------------------------------
+
+$fb .=
+    "# End code added by mu2ejobfcl:\n".
+    "#----------------------------------------------------------------\n";
+
+#================================================================
+my $orig_fcl = get_tar_member($pfname, filename_fcl);
+die "Error: could not extract '". filename_fcl ."' from '$pfname'\n"
+    unless defined $orig_fcl;
+
+print $orig_fcl;
+print $fb;
+
+#================================================================
+exit(0);

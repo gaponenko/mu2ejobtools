@@ -1,0 +1,681 @@
+#!/usr/bin/perl -w
+#
+# A.Gaponenko, 2023
+#
+
+use autodie;
+use Getopt::Long;
+use File::Basename;
+use Cwd 'abs_path';
+use Fcntl qw(:DEFAULT);
+use JSON;
+use Archive::Tar;
+use English qw( -no_match_vars ) ; # Avoids regex performance penalty
+use strict;
+use warnings;
+no warnings 'portable'; # otherwise complaints about exceeding 32-bit integers
+
+use Mu2eFilename;
+use Mu2eDSName;
+
+use lib dirname($0);
+use mu2etools;
+
+use Data::Dumper; # for debugging
+
+# information from an --auxinput specification
+# listFileName is the name of the file specified on cmdline,
+# filenames is the content of that file
+use Class::Struct Mu2eAuxInSpec => {
+    numFilesPerJob=>'$', fclkey=>'$', filenames=>'*@'
+};
+
+#================================================================
+sub usage() {
+    my $self = basename($0);
+    my $tarset = filename_tarsetup;
+    return <<EOF
+Usage:
+        $self \\
+         {--setup=<cvmfs-script-to-source.sh>|--code=/path/to/tar-file} \\
+         {--jobname=<string>|--auto-jobname[=suffix]} \\
+          --dsconf=<string> \\
+         [--dsowner=<string>] \\
+         [--overide-description] \\
+         { --inputs=<list-file-name> --merge-factor=<int> |\\
+           --run-number=<int> --events-per-job=<int> }\\
+         [--auxinput=<numFiles>:<fclVarName>:<filelist>] \\
+         [--verbose] [--help] \\
+         {--embed|--include} template-fcl-file
+
+The mu2ejobdef script packs parameters that define a set of mu2e
+Offline grid jobs into a cnf.tar file.  The name of the output file,
+in the current directory, will be constructed using --jobname (for the
+description field), --dsconf, and other pieces of information
+according to the Mu2e convention, see
+https://mu2ewiki.fnal.gov/wiki/FileNames
+but without the sequencer field, so it will look like a dataset name.
+
+The --auto-jobname option can be used only with --inputs and sets
+the description field of our cnf.tar file to that of the --inputs;
+all input files in that case must have the same description.  If a
+suffix is provided, the final description string will be the
+concatenation of the string extracted from the input file list and the
+suffix.
+
+Exactly one of --setup or --code must be provided to
+specify the version of Mu2e software to use.
+The --setup argument must point to a setup script
+on /cvmfs, like
+/cvmfs/mu2e.opensciencegrid.org/Musings/SimJob/MDC2020w/setup.sh
+The --code option must point to a code tarball, which is expected to
+have a $tarset file.  The setup file will be sourced on grid
+nodes to configure a version of Mu2e software.  Note that you will
+need sufficient disk space on the worker node to hold a copy of the
+original tarball plus its extracted content.    You also need
+to have sufficient space in the current working directory as
+the code tarball is copied into the cnf tar file we create here.
+
+The dsconf and dsowner parameters will be used to name output files of
+the grid jobs.  If --dsowner is not specified, the current username
+will be used. (If the script is run by the mu2epro user, the default
+dsowner is mu2e.)
+
+The --override-description option sets the description field of all
+grid job outputs to the same string as used to name the cnf.tar file
+defining the jobs, as derived from either the --jobname or
+--auto-jobname option.  This can only work for a subset of fcl configs
+where it does not lead to duplicate file names in different output
+streams.  By default output file descriptions set in the fcl file
+are left alone.
+
+The content of the given template-fcl-file will be copied if the
+--embed switch is specified.  In case the --include option is used,
+the fcl file used by the grid job will contain a
+#include template-fcl-file
+directive instead.  In this case the template-fcl-file string must be a
+relative file name,  locatable at the job run time via the
+FHICL_FILE_PATH environment variable.
+
+Examples:
+           --embed   ./template.fcl
+           --embed   JobConfig/beam/beam_g4s1.fcl
+           --include JobConfig/beam/beam_g4s1.fcl
+
+Whether the '--inputs' or '--run-number' group of parameters should be
+provided is determined by the source type in the template-fcl-file,
+and source configuration is set appropriately in output fcl files.
+
+If this script detects the presence of SeedService in the
+configuration, a unique seed will be defined for each grid job.
+
+The --auxinput option sets the given fcl file key so that it
+points to the files in the given filelist.  The numFiles parameter,
+which can be a natural number or the literal 'all', specifies how
+many randomly selected files from the list should be used per job.
+The --auxinput option can be repeated several times, the effect is
+cumulative.
+
+The square brackets [] in the explanations above denote optional
+settings, and {alternative1|alternative2} constructs denote mutually
+exclusive alternatives.  All option names may be abbreviates as long
+as this is unambiguous.  (For example, '--verbose' and '--verb' mean
+the same thing.)
+
+EOF
+}
+
+#================================================================
+sub checkFilenameComponent($$) {
+    my ($opt, $list) = @_;
+    foreach my $a (@$list) {
+        die "Error: parameter $a must be specified\n" unless defined $$opt{$a};
+        my $val = $$opt{$a};
+        die "Invalid value of parameter $a = '$val'"
+            unless $val =~ /^\w[-\w]*$/;
+    }
+}
+
+#================================================================
+# note that undef is a valid input, passed through
+sub find_file($) {
+    my $res = shift;
+    if( defined $res) {
+        die "Error: file \"$res\" is not readable\n"
+            unless (-f $res and -r $res);
+        $res = abs_path($res);
+    }
+    return $res;
+}
+
+#================================================================
+sub seedNeeded($) {
+    my ($filename) = @_;
+
+    # Go one level up from the seed field name in fclkey_randomSeed to
+    # the module name in $tablename
+    my @elements = split(/\./, fclkey_randomSeed);
+    pop @elements; # seed name
+    my $ssname = pop @elements;
+    my $tablename = join('.', @elements);
+
+    my @svclist = `fhicl-get --names-in $tablename $filename 2>/dev/null`;
+    chomp @svclist;
+
+    return 0 + grep /^$ssname\z/, @svclist;
+}
+
+#================================================================
+sub extractDescription($) {
+    my ($filenames) = @_;
+    my $numInputs = 1 + $#$filenames;
+
+    die "Can not extract description with no input files specified.\n"
+        unless $numInputs > 0;
+
+    my $description;
+
+    foreach my $line (@$filenames) {
+        my  $fn = Mu2eFilename->parse(basename($line));
+        $description = $fn->description unless $description;
+        die "Error: inconsistent description field in input file list: got \""
+                . $fn->description
+                . "\" after seeing \""
+                . $description
+                . "\" earlier\n"
+                unless $description eq $fn->description;
+    }
+
+    return $description;
+}
+
+#================================================================
+sub resolveFHICLFile($) {
+    my $templatespec = shift;
+
+    my @pathdirs = split(/:/, $ENV{'FHICL_FILE_PATH'});
+    foreach my $d(@pathdirs) {
+        next if $d eq '';
+        my $fn = $d . '/' . $templatespec;
+        return $fn if -f $fn;
+    }
+
+    die "Error: can not locate template file \"$templatespec\" relative to FHICL_FILE_PATH="
+        .$ENV{'FHICL_FILE_PATH'}."\n";
+}
+
+#================================================================
+sub assert_lfn($) {
+    my $filename = shift;
+
+    # redundant check for a more informative message
+    die "Error: expect filename without path or protocol specifiers,"
+        ." as output by 'mu2eDatasetFileList --basename'.\nGot: $filename\n"
+        if $filename =~ qr{/};
+
+    Mu2eFilename->parse($filename); # croaks on format errors
+}
+
+#================================================================
+# execution starts here
+
+my $defaultUser = getpwuid($EFFECTIVE_USER_ID);
+$defaultUser =~ s/^mu2epro$/mu2e/; # standard datasets should be owned by "mu2e", not "mu2epro"
+
+my @auxinputStrSpecs;
+
+my %opt = ('dsowner' =>  $defaultUser,
+           'auxinput' => \@auxinputStrSpecs,
+    );
+
+# Process command line opts.
+GetOptions(\%opt,
+           'setup=s',
+           'code=s',
+           'jobname=s',
+           'auto-jobname:s',
+           'dsconf=s',
+           'dsowner=s',
+           'override-description',
+           'inputs=s',
+           'merge-factor=i',
+           'run-number=i',
+           'events-per-job=i',
+           'auxinput=s',
+           'embed',
+           'include',
+           'help',
+           'verbose',
+    )
+    or die "\nError processing command line options.\n";
+
+if($opt{'help'}) {
+    print usage();
+    exit 0;
+}
+
+my $verbose = $opt{'verbose'};
+print "Final set of options:\n", Dumper( \%opt ), "\n"
+    if($verbose);
+
+my $override_description = $opt{'override-description'};
+
+#----------------------------------------------------------------
+# Do we use a custom tarball or a CVMFS release?
+if(defined $opt{'setup'}) {
+    die "Error: both --code and --setup are specified.  Choose one.\n" if defined $opt{'code'};
+}
+else {
+    die "Error: at least one of --setup or --code should be specified.\n" unless defined $opt{'code'};
+}
+
+my $setup = find_file($opt{'setup'}) //  filename_tarsetup; # the tarball location
+my $code = $opt{'code'} // '';
+
+#----------------------------------------------------------------
+die "A single non-option arg must specify a template file. Try the --help option.\n"
+    unless $#ARGV == 0;
+
+my $templatespec = $ARGV[0];
+
+die "Exactly one of --include or --embed must be specified.\n"
+    unless ($opt{'embed'}//0) + ($opt{'include'}//0) == 1;
+
+my $embed = $opt{'embed'} // 0;
+
+#================================================================
+# We need to keep the original relative filename of the template
+# like "JobConfig/beam/beam_g4s1.fcl" for the #include directive
+# but we also need a resolved name for fhicl-get.
+
+# Check that the file to be included is findable relative to FHICL_FILE_PATH.
+# For this use case template files should be under Offline, so our current
+# environment is "similar enough" to the worker node one for this test
+# to make sense.
+
+my $templateresolved = $embed ?
+    -e $templatespec && $templatespec
+    || resolveFHICLFile($templatespec)
+    : resolveFHICLFile($templatespec);
+
+print "Resolved template file name = $templateresolved\n" if $verbose;
+
+#----------------------------------------------------------------
+my $srctype = `fhicl-get --atom-as string source.module_type $templateresolved 2>/dev/null`;
+if($?) {
+    die "Error running fhicl-get to determine source.module_type.\n";
+}
+chomp $srctype;
+print "Got srctype = $srctype\n" if $verbose;
+
+# The set of required args depends on the fcl: e.g g4s1 needs run
+# numbers but g4s2 does not, and can not use them.
+my @emptySourceArgs = ('run-number', 'events-per-job');
+my @fileInputsArgs = ('inputs', 'merge-factor');
+
+my @infiles;
+
+# table parameters to be set on the grid node
+my %tbs;
+
+#----------------------------------------------------------------
+if($srctype eq 'EmptyEvent') {
+
+    foreach my $k (@emptySourceArgs) {
+        die "Error: --$k must be specified and nonempty for fcl files that use source type $srctype.  Try the --help option.\n"
+            unless defined $opt{$k};
+    }
+
+    foreach my $k (@fileInputsArgs, 'auto-jobname') {
+        die "Error: --$k is not compatible with fcl files that use source type $srctype.  Try the --help option.\n"
+            if defined $opt{$k};
+    }
+
+    die "Error: --jobname must be specified for jobs with the EmptyEvent source type.\n"
+        unless defined $opt{'jobname'};
+
+    $tbs{'event_id'} = {
+        'source.firstRun' => $opt{'run-number'},
+        'source.maxEvents' => $opt{'events-per-job'},
+    };
+
+}
+#----------------------------------------------------------------
+elsif(($srctype eq 'RootInput') or ($srctype eq 'FromCorsikaBinary') or ($srctype eq 'FromSTMTestBeamData')) {
+
+    foreach my $k (@fileInputsArgs) {
+        die "Error: --$k must be specified and nonempty for fcl files that use source type $srctype.  Try the --help option.\n"
+            unless defined $opt{$k};
+    }
+    foreach my $k (@emptySourceArgs) {
+        die "Error: --$k is not compatible with fcl files that use source type $srctype.  Try the --help option.\n"
+            if defined $opt{$k};
+    }
+
+    my $merge = $opt{'merge-factor'};
+    die "Error: --merge-factor must be a positive integer. Got: $merge\n" unless $merge > 0;
+
+    my $inputs = $opt{'inputs'};
+    open(my $fh, '<',  $inputs) or die "can not open $inputs: $!";
+    while(my $line = <$fh>) {
+        chomp($line);
+        next if $line =~ /^.*#/; # skip comments
+        next if $line eq ''; # and whitespace-only lines
+
+        # Check that inputs are given as logical mu2e filenames
+        assert_lfn($line);
+
+        push @infiles, $line;
+    }
+    close($fh);
+
+    #my %intable; $intable{'source.fileNames'} = [ $merge, \@infiles ];
+
+    $tbs{'inputs'} = { 'source.fileNames' => [ $merge, \@infiles ] };
+}
+#----------------------------------------------------------------
+else {
+    die "Unknown source.module_type in the input fcl\n";
+}
+
+#================================================================
+# Validate the command line parameters and their combination
+
+# Make sure components of Mu2e filenames are valid
+checkFilenameComponent(\%opt, ['dsconf', 'dsowner']);
+my $dsconf = $opt{'dsconf'};
+my $dsowner = $opt{'dsowner'};
+
+if(defined $opt{'auto-jobname'}) {
+    if(defined $opt{'jobname'}) {
+        die "Error: --jobname and --auto-jobname are mutually exclusive.\n";
+    }
+}
+else {
+    die "Error: either --jobname or --auto-jobname must be specified\n"
+        unless defined $opt{'jobname'};
+
+    checkFilenameComponent(\%opt, ['jobname']);
+}
+
+# Since we passed the checks above we should be able to set jobname one way or another
+my $jobname =  $opt{'jobname'} // extractDescription(\@infiles) . $opt{'auto-jobname'};
+
+#================================================================
+# parse the last bit of cmdline options so we can stop on syntax errors
+# before going through the time consuming fcl file analysis
+
+my %auxdupcheck;
+
+my @auxin_specs;
+foreach my $str (@auxinputStrSpecs) {
+
+    my ($nfstr, $var, $listfile, $extra) = split(/:/, $str);
+
+    die "Error in an --auxin specification: more than two ':'-s in \"$str\"\n" if defined $extra;
+    die "Error in an --auxin specification: less than two ':'-s in \"$str\"\n" unless defined $listfile;
+
+    my $numFiles;
+    if($nfstr eq 'all') {
+        $numFiles = 0;
+    }
+    elsif($nfstr =~ /^\d+$/) {
+        $numFiles = 0+$nfstr;
+        die "$numFiles = 0 is not valid in --auxin spec \"$str\".  Do you mean 'all'?\n" unless $numFiles;
+    }
+    else {
+        die "Invalid numFiles in the --auxin spec $str\n";
+    }
+
+    die "Error: re-definition of --auxinput for key $var on the command line\n" if $auxdupcheck{$var};
+    $auxdupcheck{$var} = 1;
+
+    my @auxfiles;
+    open(my $fh, '<', $listfile) or die "Can not open for reading file \"$listfile\": $!\n";
+    while(my $line = <$fh>) {
+        chomp($line);
+        die "Error in file $listfile: the line is empty or contains white spaces or other non-printable characters: \"$line\"\n"
+            unless $line =~ /^\p{IsGraph}+$/;
+
+        next if $line =~ /^.*#/; # skip comments
+        next if $line eq ''; # and whitespace-only lines
+
+        # Check that inputs are given as logical mu2e filenames
+        assert_lfn($line);
+
+        push @auxfiles, $line;
+    }
+
+    my $spec = Mu2eAuxInSpec->new(
+        numFilesPerJob=>$numFiles,
+        fclkey=>$var,
+        filenames=>\@auxfiles,
+        );
+
+    push @auxin_specs, $spec;
+}
+
+#================================================================
+# Identify all the output files, the grid proces will need
+# to update their names
+my %outtable;
+
+# TFileService output
+my $ntscmd = "fhicl-get --atom-as string ".fclkey_TFileServiceFN." $templateresolved 2>/dev/null";
+my $ntsoutstr = `$ntscmd`;
+chomp $ntsoutstr;
+print "Got ntsoutstr = $ntsoutstr\n" if $verbose;
+if($ntsoutstr ne '') {
+    # To use TFileService for reading file while avoiding a root file
+    # output, art users set TFileService.fileName to /dev/null
+    # For data handling purposes this is equivalent to not having TFileService
+    # in the config.
+    if($ntsoutstr ne '/dev/null') {
+        my $ntsfn = Mu2eFilename->parse($ntsoutstr);
+
+        die "Bad histo file name $ntsoutstr: expect data tier nts\n" unless $ntsfn->tier eq 'nts';
+        $ntsfn->owner($dsowner);
+        $ntsfn->description($jobname) if $override_description;
+        $ntsfn->configuration($dsconf);
+        # the sequencer to be set by the grid process
+        die "Bad histo file name $ntsoutstr: expect extension .root\n" unless $ntsfn->extension eq 'root';
+
+        $outtable{'' . fclkey_TFileServiceFN} = $ntsfn->basename;
+    }
+}
+
+#================================================================
+# Find out the set of art output files that should be named by the grid process
+
+my @all_outmods = `fhicl-get --names-in outputs $templateresolved 2>/dev/null`;
+chomp @all_outmods;
+print "Got all_outmods = @all_outmods\n" if $verbose;
+
+# Filter out output modules that are not active in the given configuration.
+# Prepare a list of all active end path modules (outputs, but also analyzers).
+my %endmodules;
+my @endpaths = `fhicl-get --sequence-of string physics.end_paths $templateresolved 2>/dev/null`;
+chomp @endpaths;
+foreach my $ep (@endpaths) {
+    my @mods = `fhicl-get --sequence-of string physics.$ep $templateresolved 2>/dev/null`;
+    chomp @mods;
+    for my $m (@mods) {
+        print "Found end path module = $m\n" if $verbose;
+        $endmodules{$m} = 1;
+    }
+}
+
+# Do the filtering
+my @active_outmods = grep { $endmodules{$_} } @all_outmods;
+
+die "Error: --override_description should not be used for job config with multiple art outputs.  Found output modules: @active_outmods\n"
+    if $override_description and scalar(@active_outmods) > 1;
+
+foreach my $mod (@active_outmods) {
+    my $outfilekey = sprintf fclkey_outModFMT, $mod;
+    my $outfile = `fhicl-get --atom-as string $outfilekey $templateresolved 2>/dev/null`;
+    if($?) {
+        die "Error: $outfilekey is not defined\n";
+    }
+
+    chomp $outfile;
+    print "$mod => $outfile\n" if $verbose;
+
+    my $fn = Mu2eFilename->parse($outfile);
+
+    # there are multiple valid tiers, do not check
+    $fn->owner($dsowner);
+    $fn->description($jobname) if $override_description;
+    $fn->configuration($dsconf);
+    # the sequencer to be set by the grid process
+    die "Bad output file name $outfile: expect extension .art\n" unless $fn->extension eq 'art';
+
+    $outtable{$outfilekey} = $fn->basename;
+}
+
+$tbs{'outfiles'} = \%outtable if %outtable;
+
+#================================================================
+# Handle the --auxinput options
+
+# A list of mixing module types that exist in Mu2e Offline
+my @mixmodtypes = ( 'MixBackgroundFrames', 'ResamplingMixer' );
+
+# FCL keys for mixing inputs in the job config
+my @mixinputkeys;
+
+# Prepare a list of all active trigger_path modules so we can ignore inactive filters later
+my %trigmodules;
+my @trigpaths = `fhicl-get --sequence-of string physics.trigger_paths $templateresolved 2>/dev/null`;
+chomp @trigpaths;
+foreach my $tp (@trigpaths) {
+    next if $tp eq '@nil';
+    print "working on trigger path $tp\n" if $verbose;
+    my @mods = `fhicl-get --sequence-of string physics.$tp $templateresolved 2>/dev/null`;
+    chomp @mods;
+    for my $m (@mods) {
+        $trigmodules{$m} = 1;
+    }
+}
+
+# Look for configured mixing modules and record input keys for those that are active
+my @all_filters = `fhicl-get --names-in physics.filters $templateresolved 2>/dev/null`;
+chomp @all_filters;
+
+foreach my $mod (@all_filters) {
+    if($trigmodules{$mod}) {
+
+        # see if the module is of a type that requires auxinputs
+        my $modtype = `fhicl-get --atom-as string physics.filters.$mod.module_type $templateresolved 2>/dev/null`;
+        if($?) {
+            die "Error running fhicl-get to determine physics.filters.$mod.module_type.\n";
+        }
+        chomp $modtype;
+        if (grep /^$modtype$/, @mixmodtypes) {
+            print "Found mixer module $mod of type $modtype\n" if $verbose;
+            push @mixinputkeys, "physics.filters.$mod.fileNames";
+        }
+    }
+}
+
+# Assert a one-to-one correspondence between @mixinputkeys and @auxin_specs
+my @auxkeys = map { $_->fclkey } @auxin_specs;
+
+foreach my $k (@mixinputkeys) {
+    grep /^$k$/, @auxkeys
+        or die "Error: The FCL config requires auxiliary inputs for $k that are not provided\n";
+}
+
+foreach my $k (@auxkeys) {
+    grep /^$k$/, @mixinputkeys
+        or die "Error: key $k in an --auxinput option does not have a correspondence in the FCL config\n";
+}
+
+# auxin info to put into json
+my %auxintable;
+foreach my $s (@auxin_specs) {
+    $auxintable{$s->fclkey} = [ $s->numFilesPerJob, $s->filenames];
+}
+
+$tbs{'auxin'} = \%auxintable if %auxintable;
+
+#================================================================
+my $tar = Archive::Tar->new;
+
+#================================================================
+$tbs{'seed'} = fclkey_randomSeed if seedNeeded($templateresolved);
+
+my %pars = (
+    code => $code ? filename_tarball : "",
+    setup => $setup,
+    tbs => \%tbs,
+);
+
+my $js = JSON->new->pretty;
+my $jsstr = $js->encode(\%pars) .  "\n";
+$tar->add_data(filename_json, $jsstr);
+
+#================================================================
+# format template fcl and add it to the tar file
+my $fclbuf;
+
+if($embed) {
+    open my $fh, '<', $templateresolved or die "error opening $templateresolved: $!";
+    $fclbuf .= do { local $/; <$fh> };
+}
+else {
+    $fclbuf .= '#include '.doubleQuote($templatespec)."\n";
+}
+
+$tar->add_data(filename_fcl, $fclbuf);
+
+#================================================================
+# The code tarball is best added at the end of the archive,
+# so that clients that only need to extract json or fcl
+# are not forced to read through it
+if($code) {
+
+    die "Error: file \"$code\" is not readable\n"
+        unless (-f $code and -r $code);
+
+    # make sure there is the code tarball has setup.sh file in the correct place
+    if(1) {
+        print "Checking $code  for ", filename_tarsetup, ", this may be slow for large tarballs...\n";
+        my $codetar = Archive::Tar->new();
+        my $ts = filename_tarsetup;
+        $codetar->read($code, 1, { filter => qr{^$ts$} } );
+        my @list = $codetar->list_files();
+        unless (scalar(@list)) {
+            die "Error: no ".filename_tarsetup." in $code\n";
+        }
+    }
+
+    # On SL7 /bin/tar --append produces corrupt tarballs
+    # when appending to files made with perl's Archive::Tar.
+    # So we have to add the code to our output in the
+    # memory-expensive way using Archive::Tar.
+
+    print "Adding the code tarball...\n";
+    my $cf = Archive::Tar::File->new(file => $code);
+    $cf->rename(filename_tarball);
+    $tar->add_files($cf);
+}
+
+#================================================================
+my $fn = Mu2eDSName->new;
+$fn->tier('cnf');
+$fn->owner($dsowner);
+$fn->configuration($dsconf);
+$fn->description($jobname);
+$fn->extension('tar');
+my $outfilename = $fn->dsname;
+
+{ no autodie qw(sysopen);
+  sysopen(my $ofh, $outfilename, O_CREAT | O_EXCL | O_WRONLY)
+      or die "Error creating $outfilename: $!\n";
+  $tar->write($ofh);
+  $ofh->close();
+}
+
+print "Wrote  $outfilename\n";
+exit(0);
