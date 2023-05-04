@@ -54,7 +54,8 @@ in the current directory, will be constructed using --jobdesc (for the
 description field), --dsconf, and other pieces of information
 according to the Mu2e convention, see
 https://mu2ewiki.fnal.gov/wiki/FileNames
-but without the sequencer field, so it will look like a dataset name.
+The sequencer field for job names is not meaningful and
+is always set to "0".
 
 The --auto-jobdesc option can be used only with --inputs and sets
 the description field of our cnf.tar file to that of the --inputs;
@@ -662,13 +663,14 @@ if($code) {
 }
 
 #================================================================
-my $fn = Mu2eDSName->new;
+my $fn = Mu2eFilename->new;
 $fn->tier('cnf');
 $fn->owner($dsowner);
 $fn->configuration($dsconf);
 $fn->description($jobdesc);
+$fn->sequencer('0');
 $fn->extension('tar');
-my $outfilename = $fn->dsname;
+my $outfilename = $fn->basename;
 
 { no autodie qw(sysopen);
   sysopen(my $ofh, $outfilename, O_CREAT | O_EXCL | O_WRONLY)
