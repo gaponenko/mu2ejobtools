@@ -1,0 +1,72 @@
+#!/usr/bin/perl -w
+#
+# A.Gaponenko, 2023
+#
+
+use Getopt::Long;
+use File::Basename;
+use JSON;
+use Archive::Tar;
+use English qw( -no_match_vars ) ; # Avoids regex performance penalty
+use strict;
+use warnings;
+
+use lib dirname($0);
+use mu2etools;
+
+use Data::Dumper; # for debugging
+
+#================================================================
+sub usage() {
+    my $self = basename($0);
+    return <<EOF
+Usage:
+        $self \\
+           --jobname \\
+           [-h|--help] \\
+	   cnf.tar
+
+This script extracts and prints out information from the job parameter
+file cnf.tar
+The possible queries are
+
+    --jobname  The name of the job set.
+
+EOF
+}
+
+#================================================================
+my %opt;
+
+GetOptions(\%opt,
+           'jobname',
+           'help',
+    )
+    or die "\nError processing command line options.\n";
+
+if($opt{'help'}) {
+    print usage();
+    exit 0;
+}
+
+die "Error: too many arguments: @ARGV\n"
+       if(scalar(@ARGV) > 1);
+
+die "Error: the cnf.tar agument is required.\n"
+       if(scalar(@ARGV) < 1);
+
+my $pfname = $ARGV[0];
+my $jsstr = get_tar_member($pfname, filename_json)
+   or die "Error: can not extract ". filename_json ." from $pfname.\n";
+
+my $js = JSON->new->decode($jsstr);
+
+#================================================================
+if( $opt{'jobname'} ) {
+    my $jobname = $js->{'jobname'}
+       or die "Error: no jobname in $pfname\n";
+    print $jobname, "\n";
+}
+
+#================================================================
+exit(0);
