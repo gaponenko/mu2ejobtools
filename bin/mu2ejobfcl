@@ -23,6 +23,23 @@ use mu2etools;
 use Data::Dumper; # for debugging
 
 #================================================================
+sub primary_inputs($$$) {
+    my ($index, $merge, $filelist) = @_;
+
+    # skip the first $index * $merge files,
+    # then take what is left, up to $merge
+    my $nf = scalar(@$filelist);
+    my $first = $index*$merge;
+    my $last = $first + $merge - 1;
+    $last = $nf - 1 if $nf - 1 < $last;
+
+    die "primary_inputs(): invalid index $index\n"
+        unless $first <= $last; # no emtpy lists
+
+    return @$filelist[$first .. $last];
+}
+
+#================================================================
 sub usage() {
     my $self = basename($0);
     my $protostr = '' . proto_file . ',' . proto_root;
@@ -74,7 +91,7 @@ my $pfname = $opt{'parfile'};
 die "Error: $pfname is not a file\n" unless -f $pfname;
 die "Error: file $pfname is not readable\n" unless -r $pfname;
 
-die "Error: --index is required\n" unless $opt{'index'};
+die "Error: --index is required\n" unless defined $opt{'index'};
 my $index = $opt{'index'};
 die "Error: --index must be non-negative, got: $index\n" if $index < 0;
 
@@ -126,6 +143,14 @@ if($tbs->{'inputs'} || $tbs->{'auxin'}) {
 }
 
 #================================================================
+# is the index in range?
+
+if(my $njobs = get_njobs($js)) {
+    die "Zero based index $index is too large for njobs = $njobs\n"
+        unless $index < $njobs;
+}
+
+#================================================================
 my $fb =
     "#----------------------------------------------------------------\n".
     "# Code added by mu2ejobfcl:\n";
@@ -140,12 +165,13 @@ if($tbs->{'event_id'}) {
 }
 
 #----------------------------------------------------------------
-if($tbs->{'inputs'}) {
-    my ($k, $v) = each($tbs->{'inputs'});
-    my $numfiles = $v->[0];
+if(my $in = $tbs->{'inputs'}) {
+    my ($k, $v) = %$in;
+    my $merge = $v->[0];
     my $filelist = $v->[1];
+    my @jobinputs = primary_inputs($index, $merge, $filelist);
 
-    my @jobinputs = file_inputs($index, $numfiles, $filelist);
+    $fb .= "$k: [\n    " . join(",\n    ", @jobinputs) . "\n]\n";
 }
 
 #----------------------------------------------------------------
