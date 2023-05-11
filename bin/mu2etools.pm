@@ -64,7 +64,7 @@ sub get_njobs($) {
 
     my $njobs = 0;
     if(my $in = $tbs->{'inputs'}) {
-        my ($k, $v) = each($in);
+        my ($k, $v) = %$in;
         my $merge = $v->[0];
         my $files = $v->[1];
         my $nf = scalar(@$files);
