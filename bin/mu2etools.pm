@@ -9,10 +9,13 @@ package mu2etools;
 use parent qw(Exporter);
 
 use strict;
+use Carp;
 use Cwd 'abs_path';
 use Archive::Tar;
 use POSIX qw(ceil);
 use English qw( -no_match_vars ) ; # Avoids regex performance penalty
+
+use Data::Dumper; # for debugging
 
 #================================================================
 # Define strings that are used in multiple places
@@ -54,10 +57,27 @@ sub get_tar_member($$) {
 }
 
 #================================================================
+sub get_njobs($) {
+    my ($js) = @_;
+    my $tbs = $js->{'tbs'}
+    or croak "Error: get_njobs(): could not extract tbs from the json\n";
+
+    my $njobs = 0;
+    if(my $in = $tbs->{'inputs'}) {
+        my ($k, $v) = each($in);
+        my $merge = $v->[0];
+        my $files = $v->[1];
+        my $nf = scalar(@$files);
+        use integer;
+        $njobs = $nf/$merge + (($nf % $merge) ? 1 : 0);
+    }
+    return $njobs;
+}
+
+#================================================================
 our $VERSION = '1.00';
 
 our @EXPORT      = qw(
-                      doubleQuote
                       fclkey_randomSeed
                       fclkey_TFileServiceFN
                       fclkey_outModFMT
@@ -69,7 +89,9 @@ our @EXPORT      = qw(
                       proto_root
                       location_local
 
+                      doubleQuote
                       get_tar_member
+                      get_njobs
    );
 
 #================================================================
