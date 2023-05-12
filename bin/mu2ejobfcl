@@ -40,6 +40,29 @@ sub primary_inputs($$$) {
 }
 
 #================================================================
+sub format_filenames($$$$) {
+    my ($proto, $loc, $dir, $list) = @_;
+
+    if($proto eq 'file') {
+        if($loc eq 'local') {
+            return map { $dir . '/' . $_ } @$list;
+        }
+        else { # supposed to be a standard mu2efilename location
+            return map {
+                my $fn = Mu2eFilename->parse($_);
+                $fn->abspathname($loc);
+            } @$list;
+        }
+    }
+    elsif($proto eq 'root') {
+        die "proto root not implemented";
+    }
+    else {
+        die "Error: unknown protocol $proto\n";
+    }
+}
+
+#================================================================
 sub usage() {
     my $self = basename($0);
     my $protostr = '' . proto_file . ',' . proto_root;
@@ -171,7 +194,10 @@ if(my $in = $tbs->{'inputs'}) {
     my $filelist = $v->[1];
     my @jobinputs = primary_inputs($index, $merge, $filelist);
 
-    $fb .= "$k: [\n    " . join(",\n    ", @jobinputs) . "\n]\n";
+    $fb .= "$k: [\n    "
+        . join(",\n    ",
+               format_filenames($proto, $loc, $dirprefix, \@jobinputs) )
+        . "\n]\n";
 }
 
 #----------------------------------------------------------------
