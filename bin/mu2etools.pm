@@ -36,7 +36,12 @@ use constant location_local => 'local'; # others come from Mu2eFNBase.pm
 
 #================================================================
 sub doubleQuote {
-    return  map {'"'.$_.'"' } @_;
+    my @res = map {'"'.$_.'"' } @_;
+    return @res if wantarray;
+    croak "doubleQuote() called in a scalar content,"
+        ." expect a single arg, got (@_) instead\n"
+        unless scalar(@res) == 1;
+    return $res[0];
 }
 
 #================================================================
