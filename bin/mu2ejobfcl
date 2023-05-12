@@ -23,8 +23,11 @@ use mu2etools;
 use Data::Dumper; # for debugging
 
 #================================================================
-sub primary_inputs($$$) {
-    my ($index, $merge, $filelist) = @_;
+sub primary_inputs($$) {
+    my ($index, $in) = @_;
+    my ($k, $v) = %$in;
+    my $merge = $v->[0];
+    my $filelist = $v->[1];
 
     # skip the first $index * $merge files,
     # then take what is left, up to $merge
@@ -69,6 +72,29 @@ sub format_filenames($$$$) {
     else {
         die "Error: unknown protocol $proto\n";
     }
+}
+
+#================================================================
+sub get_sequencer($$) {
+    my ($index, $tbs) = @_;
+
+    # See https://mu2ewiki.fnal.gov/wiki/FileNames#sequencer
+    if(my $in = $tbs->{'inputs'}) {
+        my @files = primary_inputs($index, $in);
+        my @seqs = map { my $f = Mu2eFilename->parse($_); $f->sequencer } @files;
+        # if input file names use a consistent formatting for the sequencer
+        # then string sort will do what is needed
+        @seqs = sort @seqs;
+        return $seqs[0];
+    }
+    elsif(my $evid = $tbs->{'event_id'}) {
+        my $run = $evid->{'source.firstRun'}
+        or die "Error: get_sequencer(): can not get source.firstRun from event_id\n";
+        my $subrun = $index;
+        return sprintf('%06d_%08d', $run, $subrun);
+   }
+
+    die "Error: get_sequencer(): unsupported JSON content\n";
 }
 
 #================================================================
@@ -199,9 +225,7 @@ if($tbs->{'event_id'}) {
 #----------------------------------------------------------------
 if(my $in = $tbs->{'inputs'}) {
     my ($k, $v) = %$in;
-    my $merge = $v->[0];
-    my $filelist = $v->[1];
-    my @jobinputs = primary_inputs($index, $merge, $filelist);
+    my @jobinputs = primary_inputs($index, $in);
 
     $fb .= "$k: [\n    "
         . join(",\n    ",
@@ -210,7 +234,15 @@ if(my $in = $tbs->{'inputs'}) {
 }
 
 #----------------------------------------------------------------
-if($tbs->{'outfiles'}) {
+if(my $out = $tbs->{'outfiles'}) {
+    #print "out = ",Dumper($out),"\n";
+    my $seq = get_sequencer($index, $tbs);
+    keys %$out; # reset the iterator, just in case
+    while(my ($k, $v) = each(%$out)) {
+        my $f = Mu2eFilename->parse($v);
+        $f->sequencer($seq);
+        $fb .= "$k: ".  doubleQuote($f->basename()) . "\n";
+    }
 }
 
 #----------------------------------------------------------------
@@ -223,7 +255,6 @@ if($tbs->{'seed'}) {
 }
 
 #----------------------------------------------------------------
-
 $fb .=
     "# End code added by mu2ejobfcl:\n".
     "#----------------------------------------------------------------\n";
