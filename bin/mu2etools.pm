@@ -35,9 +35,8 @@ use constant proto_root => 'root';
 use constant location_local => 'local'; # others come from Mu2eFNBase.pm
 
 #================================================================
-sub doubleQuote($) {
-    my ($fn) = @_;
-    return  '"'.$fn.'"';
+sub doubleQuote {
+    return  map {'"'.$_.'"' } @_;
 }
 
 #================================================================

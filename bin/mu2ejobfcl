@@ -205,7 +205,7 @@ if(my $in = $tbs->{'inputs'}) {
 
     $fb .= "$k: [\n    "
         . join(",\n    ",
-               format_filenames($proto, $loc, $dirprefix, \@jobinputs) )
+               doubleQuote(format_filenames($proto, $loc, $dirprefix, \@jobinputs)))
         . "\n]\n";
 }
 
