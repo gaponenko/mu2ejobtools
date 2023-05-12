@@ -55,7 +55,16 @@ sub format_filenames($$$$) {
         }
     }
     elsif($proto eq 'root') {
-        die "proto root not implemented";
+        return map {
+            my $fn = Mu2eFilename->parse($_);
+            my $url = $fn->abspathname($loc);
+
+            # the substitution is documented here
+            # https://mu2ewiki.fnal.gov/wiki/DataTransfer#Load_balancer_door
+            $url =~ s|^/pnfs/|xroot://fndcadoor.fnal.gov//pnfs/fnal.gov/usr/|;
+            $url;
+
+        } @$list;
     }
     else {
         die "Error: unknown protocol $proto\n";
