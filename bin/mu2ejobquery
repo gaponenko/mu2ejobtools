@@ -21,10 +21,7 @@ sub usage() {
     my $self = basename($0);
     return <<EOF
 Usage:
-        $self \\
-           --jobname \\
-           [-h|--help] \\
-	   cnf.tar
+        $self [-h|--help] <query> cnf.tar
 
 This script extracts and prints out information from the job parameter
 file cnf.tar
@@ -57,6 +54,10 @@ die "Error: too many arguments: @ARGV\n"
 
 die "Error: the cnf.tar agument is required.\n"
        if(scalar(@ARGV) < 1);
+
+my $nopt = scalar(keys %opt);
+die "What is the query?\n" unless $nopt;
+die "Error: multiple queries\n" unless $nopt == 1;
 
 my $pfname = $ARGV[0];
 my $jsstr = get_tar_member($pfname, filename_json)
