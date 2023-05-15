@@ -9,6 +9,7 @@ use Cwd 'abs_path';
 use Fcntl qw(:DEFAULT);
 use JSON;
 use Archive::Tar;
+use Digest;
 use English qw( -no_match_vars ) ; # Avoids regex performance penalty
 use strict;
 use warnings;
@@ -23,6 +24,20 @@ use mu2etools;
 use Data::Dumper; # for debugging
 
 #================================================================
+sub my_random {
+    my $h = Digest->new("SHA-256");
+    foreach my $i (@_) {
+        $h->add($i);
+    }
+
+    # the result should be the same on all systems
+    # as long as the use of hexdigest is portable.
+    my $rnd = hex substr($h->hexdigest, 0, 8);
+    return $rnd;
+}
+
+#================================================================
+# returns a list of basenames
 sub primary_inputs($$) {
     my ($index, $in) = @_;
     my ($k, $v) = %$in;
@@ -40,6 +55,32 @@ sub primary_inputs($$) {
         unless $first <= $last; # no emtpy lists
 
     return @$filelist[$first .. $last];
+}
+
+#================================================================
+# returns a list of basenames
+sub aux_inputs($$) {
+    my ($index, $ai) = @_;
+    my $nreq = $ai->[0];
+    my @infiles = @{$ai->[1]};
+
+    # zero means take all files
+    $nreq = scalar(@infiles) unless $nreq;
+
+    # We want to draw nreq "random" files from the list, without
+    # repetitions.
+    my @res;
+    for(my $count = 0; $count < $nreq; ++$count) {
+
+        # The "random" part has to be reproducible. Instead of relying on
+        # an external random number generator, make one from our inputs.
+        my $rnd = my_random($index, @infiles);
+        my $index = $rnd % scalar(@infiles);
+        push @res, $infiles[$index];
+        splice @infiles, $index, 1; # drop the file we just used from inputs
+    }
+
+    return @res;
 }
 
 #================================================================
@@ -246,7 +287,17 @@ if(my $out = $tbs->{'outfiles'}) {
 }
 
 #----------------------------------------------------------------
-if($tbs->{'auxin'}) {
+if(my $au = $tbs->{'auxin'}) {
+    keys %$au; # reset the iterator
+    while(my ($k, $v) = each(%$au)) {
+
+        my @infiles = aux_inputs($index, $v);
+
+        $fb .= "$k: [\n    "
+            . join(",\n    ",
+                   doubleQuote(format_filenames($proto, $loc, $dirprefix, \@infiles)))
+            . "\n]\n";
+    }
 }
 
 #----------------------------------------------------------------
