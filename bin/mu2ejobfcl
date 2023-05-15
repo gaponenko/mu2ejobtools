@@ -237,8 +237,6 @@ if($tbs->{'inputs'} || $tbs->{'auxin'}) {
         die "Error: location $loc only makes sense for the 'file' protocol, got $proto\n"
             unless $proto eq proto_file;
     }
-
-    #print "Using protocol $proto location $loc dirprefix $dirprefix\n";
 }
 
 #================================================================
@@ -276,7 +274,6 @@ if(my $in = $tbs->{'inputs'}) {
 
 #----------------------------------------------------------------
 if(my $out = $tbs->{'outfiles'}) {
-    #print "out = ",Dumper($out),"\n";
     my $seq = get_sequencer($index, $tbs);
     keys %$out; # reset the iterator, just in case
     while(my ($k, $v) = each(%$out)) {
