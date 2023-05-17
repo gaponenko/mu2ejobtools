@@ -25,12 +25,22 @@ Usage:
 
 This script extracts and prints out information from the job parameter
 file cnf.tar
+
 The possible queries are
 
     --jobname  The name of the job set.
 
     --njobs    The number of jobs in the set, zero means unlimited.
 
+    --setup    Print out shell commands to perform Mu2e software setup
+               to run the job.  WARNING: if the job parameter file
+               includes a code tarball, it will  be expanded in the
+               current directory.  Cd to a suitable location before
+               running the --setup query.   The intended use is
+
+               \$ \`mu2ejobquery --setup cnf.tar\`
+
+               note the backticks to execute the setup.
 EOF
 }
 
@@ -40,6 +50,7 @@ my %opt;
 GetOptions(\%opt,
            'jobname',
            'njobs',
+           'setup',
            'help',
     )
     or die "\nError processing command line options.\n";
@@ -76,6 +87,32 @@ if( $opt{'jobname'} ) {
 if( $opt{'njobs'} ) {
     my $nj = get_njobs($js);
     print "$nj\n";
+}
+
+#================================================================
+if( $opt{'setup'} ) {
+    if(my $code = $js->{'code'}) {
+        open(my $in, '-|',
+             'tar', '--extract', '--to-stdout', "--file=$pfname", $code)
+            or die "Error running tar on $pfname\n";
+
+        open(my $out, '|-',
+             'tar', '--extract', '--bzip2', "--file=-")
+            or die "Error running code expansion tar\n";
+
+        my $BUFSIZE = 64 * (2**20);
+        my $buf;
+        while(read($in, $buf, $BUFSIZE)) {
+            print $out $buf
+                or die "Error extracting the code: $!\n";
+        }
+
+        close($in) or die "Error closing input tar pipe: $!\n";
+        close($out) or die "Error closing output tar pipe: $!\n";
+    }
+
+    my $sf = $js->{'setup'} or die "Error: no setup in JSON\n";
+    print "source $sf\n";
 }
 
 #================================================================
