@@ -1,0 +1,8 @@
+This package contains tools for creating and using Mu2e "job
+parameter" files.  A job parameter file defines a (finite or infinite)
+set of jobs, which can be run on the grid, or otherwise, in a
+reproducible way.
+
+Before using the mu2ejobdef script one need to setup the fhiclcpp
+package and FHICL_FILE_PATH environment variable.  This is usually
+accomplished by setting up Mu2e Offline.

@@ -1,0 +1,11 @@
+FILE=Table
+Product=mu2ejobtools
+
+Flavor=ANY
+Qualifiers=""
+
+Action=setup
+   ProdDir()
+   SetupEnv()
+   SetupRequired( mu2efilename )
+   pathPrepend(PATH, ${UPS_PROD_DIR}/bin)

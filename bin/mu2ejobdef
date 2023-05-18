@@ -19,7 +19,7 @@ use Mu2eFilename;
 use Mu2eDSName;
 
 use lib dirname($0);
-use mu2etools;
+use mu2ejobtools;
 
 use Data::Dumper; # for debugging
 

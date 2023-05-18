@@ -1,0 +1,35 @@
+Update product
+
+edit a new line in the case statement in ups/customSetup.sh
+
+
+Make a new product tarball
+
+   ver=v1_00_00
+   git archive --prefix=mu2ejobtools/$ver/ --output=../mu2ejobtools-$ver.tgz ${ver:?version not set}
+
+Install the product
+
+   ver=v1_00_00
+   cd artexternals
+   tar xvf /path/mu2ejobtools-$ver.tgz
+   ups declare mu2ejobtools $ver -r mu2ejobtools/$ver -f NULL -m mu2ejobtools.table
+
+A complete example of CVMFS installation
+
+   ssh cvmfsmu2e@oasiscfs.fnal.gov
+   cvmfs_server transaction mu2e.opensciencegrid.org
+   cd /cvmfs/mu2e.opensciencegrid.org/artexternals
+
+   ### export prod_db=`pwd`
+   ### source ./setup
+   source /cvmfs/fermilab.opensciencegrid.org/products/common/etc/setups
+   setup mu2e
+
+   ver=v1_00_00
+   tar xvf /grid/fermiapp/mu2e/users/gandr/dev/mu2ejobtools-$ver.tgz
+   ups list -aK+ mu2ejobtools
+   ups declare mu2ejobtools $ver -r mu2ejobtools/$ver -f NULL -m mu2ejobtools.table
+   ups list -aK+ mu2ejobtools
+   cd
+   cvmfs_server publish mu2e.opensciencegrid.org

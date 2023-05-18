@@ -1,11 +1,11 @@
 #!/usr/bin/perl -w
 #
-# Code shared by different mu2etools scripts
+# Code shared by different mu2ejobtools scripts
 #
 # A.Gaponenko, 2023
 #
 
-package mu2etools;
+package mu2ejobtools;
 use parent qw(Exporter);
 
 use strict;
