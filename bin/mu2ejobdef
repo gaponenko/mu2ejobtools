@@ -98,6 +98,8 @@ directive instead.  In this case the template-fcl-file string must be a
 relative file name,  locatable at the job run time via the
 FHICL_FILE_PATH environment variable.
 
+Before this script can be used, a version of Mu2e Offline should be setup.
+
 Examples:
            --embed   ./template.fcl
            --embed   JobConfig/beam/beam_g4s1.fcl
@@ -124,6 +126,16 @@ as this is unambiguous.  (For example, '--verbose' and '--verb' mean
 the same thing.)
 
 EOF
+}
+
+#================================================================
+sub assert_environment_setup {
+    my $msg = "Please setup Mu2e Offline before using this script.\n";
+    die "Error: no FHICL_FILE_PATH in the environment.\n" . $msg
+        unless $ENV{'FHICL_FILE_PATH'};
+
+    die "Error: can not execute fhicl-get\n" . $msg
+        unless 0 == system('fhicl-get -h > /dev/null 2>&1');
 }
 
 #================================================================
@@ -254,6 +266,8 @@ if($opt{'help'}) {
     print usage();
     exit 0;
 }
+
+assert_environment_setup();
 
 my $verbose = $opt{'verbose'};
 print "Final set of options:\n", Dumper( \%opt ), "\n"
