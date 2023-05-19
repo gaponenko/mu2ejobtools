@@ -7,6 +7,7 @@ use Getopt::Long;
 use File::Basename;
 use JSON;
 use Archive::Tar;
+use Digest::MD5; # Archive::Tar should have requested this itself...
 use English qw( -no_match_vars ) ; # Avoids regex performance penalty
 use strict;
 use warnings;
@@ -32,6 +33,10 @@ The possible queries are
 
     --njobs    The number of jobs in the set, zero means unlimited.
 
+    --codesize The size of the compressed code tarball, in bytes.
+               This will print 0 if the job par file does not
+               contain code.
+
     --setup    Print out shell commands to perform Mu2e software setup
                to run the job.  WARNING: if the job parameter file
                includes a code tarball, it will  be expanded in the
@@ -50,6 +55,7 @@ my %opt;
 GetOptions(\%opt,
            'jobname',
            'njobs',
+           'codesize',
            'setup',
            'help',
     )
@@ -87,6 +93,28 @@ if( $opt{'jobname'} ) {
 if( $opt{'njobs'} ) {
     my $nj = get_njobs($js);
     print "$nj\n";
+}
+
+#================================================================
+if( $opt{'codesize'} ) {
+    my $sz = 0;
+
+    if(my $codename = $js->{'code'}) {
+        my $tar = Archive::Tar->new();
+
+        # We do not need to store the content of the code tarball in
+        # memory.  Use the md5 option here to drastically reduce
+        # memory consumption.
+        $tar->read($pfname, 1, {md5 => 1, filter => qr{^$codename$} } );
+        my @props = ('size');
+        my @list = $tar->list_files(\@props);
+        die "Error extracting the size of arvhive member '$codename' in '$pfname'\n"
+            unless @list;
+
+        $sz = (values $list[0])[0];
+    }
+
+    print $sz . "\n";
 }
 
 #================================================================
