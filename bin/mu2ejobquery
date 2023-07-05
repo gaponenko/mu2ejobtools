@@ -111,7 +111,7 @@ if( $opt{'codesize'} ) {
         die "Error extracting the size of arvhive member '$codename' in '$pfname'\n"
             unless @list;
 
-        $sz = (values $list[0])[0];
+        $sz = $list[0]->{'size'};
     }
 
     print $sz . "\n";
