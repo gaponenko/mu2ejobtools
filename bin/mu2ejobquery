@@ -12,7 +12,7 @@ use English qw( -no_match_vars ) ; # Avoids regex performance penalty
 use strict;
 use warnings;
 
-use lib dirname($0);
+use lib dirname($0) . '/../perllib/';
 use mu2ejobtools;
 
 use Data::Dumper; # for debugging

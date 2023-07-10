@@ -18,7 +18,7 @@ no warnings 'portable'; # otherwise complaints about exceeding 32-bit integers
 use Mu2eFilename;
 use Mu2eDSName;
 
-use lib dirname($0);
+use lib dirname($0) . '/../perllib/';
 use mu2ejobtools;
 
 use Data::Dumper; # for debugging

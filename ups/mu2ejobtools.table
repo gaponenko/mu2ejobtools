@@ -9,3 +9,4 @@ Action=setup
    SetupEnv()
    SetupRequired( mu2efilename )
    pathPrepend(PATH, ${UPS_PROD_DIR}/bin)
+   EnvPrepend(PERL5LIB, ${UPS_PROD_DIR}/perllib )

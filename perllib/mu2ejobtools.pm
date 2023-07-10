@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 #
-# Code shared by different mu2ejobtools scripts
+# Interfaces to work with Mu2e job definition files.
 #
 # A.Gaponenko, 2023
 #
