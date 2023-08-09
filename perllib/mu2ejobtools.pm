@@ -17,6 +17,8 @@ use English qw( -no_match_vars ) ; # Avoids regex performance penalty
 
 use Data::Dumper; # for debugging
 
+use Mu2eFilename;
+
 #================================================================
 # Define strings that are used in multiple places
 
@@ -55,6 +57,7 @@ sub get_tar_member($$) {
 }
 
 #================================================================
+# arg is the top-level json object
 sub get_njobs($) {
     my ($js) = @_;
     my $tbs = $js->{'tbs'}
@@ -73,11 +76,46 @@ sub get_njobs($) {
 }
 
 #================================================================
+# arg is the top-level json object
+sub get_datasets($) {
+    my ($js) = @_;
+    my $tbs = $js->{'tbs'}
+    or croak "Error: get_njobs(): could not extract tbs from the json\n";
+
+    my %datasets; # use hash to remove the dups
+
+    if(my $in = $tbs->{'inputs'}) {
+        my ($k, $v) = %$in;
+        my $filelist = $v->[1];
+        foreach my $i (@$filelist) {
+            my $f = Mu2eFilename->parse($i);
+            ++$datasets{$f->dataset->dsname};
+        }
+    }
+
+    if(my $au = $tbs->{'auxin'}) {
+        keys %$au; # reset the iterator
+        while(my ($k, $v) = each(%$au)) {
+            my $filelist = $v->[1];
+            foreach my $i (@$filelist) {
+                my $f = Mu2eFilename->parse($i);
+                ++$datasets{$f->dataset->dsname};
+            }
+        }
+    }
+
+    print "Got datasets ",Dumper(%datasets),"\n";
+
+    return keys %datasets;
+}
+
+#================================================================
 our $VERSION = '1.00';
 
 our @EXPORT      = qw(
                       get_tar_member
                       get_njobs
+                      get_datasets
    );
 
 our @EXPORT_OK   = qw(

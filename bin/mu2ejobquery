@@ -35,6 +35,8 @@ The possible queries are
 
     --njobs    The number of jobs in the set, zero means unlimited.
 
+    --datasets A list of all datasets used by the jobs.
+
     --codesize The size of the compressed code tarball, in bytes.
                This will print 0 if the job par file does not
                contain code.
@@ -57,6 +59,7 @@ my %opt;
 GetOptions(\%opt,
            'jobname',
            'njobs',
+           'datasets',
            'codesize',
            'setup',
            'help',
@@ -95,6 +98,12 @@ if( $opt{'jobname'} ) {
 if( $opt{'njobs'} ) {
     my $nj = get_njobs($js);
     print "$nj\n";
+}
+
+#================================================================
+if( $opt{'datasets'} ) {
+    my @dss = get_datasets($js);
+    print "@dss\n";
 }
 
 #================================================================
