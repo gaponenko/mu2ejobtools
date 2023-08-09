@@ -344,7 +344,7 @@ my @fileInputsArgs = ('inputs', 'merge-factor');
 
 my @infiles;
 
-# table parameters to be set on the grid node
+# table of parameters to be set on the grid node
 my %tbs;
 
 #----------------------------------------------------------------
