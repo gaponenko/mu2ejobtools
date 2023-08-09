@@ -20,14 +20,8 @@ use Data::Dumper; # for debugging
 #================================================================
 # Define strings that are used in multiple places
 
-use constant fclkey_randomSeed => 'services.SeedService.baseSeed';
-use constant fclkey_TFileServiceFN => 'services.TFileService.fileName';
-use constant fclkey_outModFMT => 'outputs.%s.fileName';
-
 use constant filename_json => 'jobpars.json';
 use constant filename_fcl => 'mu2e.fcl';
-use constant filename_tarball => 'code.tar';
-use constant filename_tarsetup => 'Code/setup.sh';
 
 use constant proto_file => 'file';
 use constant proto_root => 'root';
@@ -82,20 +76,19 @@ sub get_njobs($) {
 our $VERSION = '1.00';
 
 our @EXPORT      = qw(
-                      fclkey_randomSeed
-                      fclkey_TFileServiceFN
-                      fclkey_outModFMT
+                      get_tar_member
+                      get_njobs
+   );
+
+our @EXPORT_OK   = qw(
                       filename_json
                       filename_fcl
-                      filename_tarball
-                      filename_tarsetup
+
                       proto_file
                       proto_root
                       location_local
 
                       doubleQuote
-                      get_tar_member
-                      get_njobs
    );
 
 #================================================================

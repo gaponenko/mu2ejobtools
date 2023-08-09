@@ -13,7 +13,9 @@ use strict;
 use warnings;
 
 use lib dirname($0) . '/../perllib/';
-use mu2ejobtools;
+use mu2ejobtools qw(:DEFAULT
+                    filename_json
+                    );
 
 use Data::Dumper; # for debugging
 

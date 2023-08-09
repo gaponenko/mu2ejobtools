@@ -19,7 +19,10 @@ use Mu2eFilename;
 use Mu2eDSName;
 
 use lib dirname($0) . '/../perllib/';
-use mu2ejobtools;
+use mu2ejobtools qw(:DEFAULT doubleQuote
+                    filename_json filename_fcl
+                    proto_file proto_root location_local
+                    );
 
 use Data::Dumper; # for debugging
 

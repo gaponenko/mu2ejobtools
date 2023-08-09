@@ -20,7 +20,10 @@ use Mu2eFilename;
 use Mu2eDSName;
 
 use lib dirname($0) . '/../perllib/';
-use mu2ejobtools;
+use mu2ejobtools qw(
+                    filename_json filename_fcl
+                    doubleQuote
+                    );
 
 use Data::Dumper; # for debugging
 
@@ -30,6 +33,16 @@ use Data::Dumper; # for debugging
 use Class::Struct Mu2eAuxInSpec => {
     numFilesPerJob=>'$', fclkey=>'$', filenames=>'*@'
 };
+
+#================================================================
+# Define strings that are used in multiple places
+
+use constant fclkey_randomSeed => 'services.SeedService.baseSeed';
+use constant fclkey_TFileServiceFN => 'services.TFileService.fileName';
+use constant fclkey_outModFMT => 'outputs.%s.fileName';
+
+use constant filename_tarball => 'code.tar';
+use constant filename_tarsetup => 'Code/setup.sh';
 
 #================================================================
 sub usage() {
