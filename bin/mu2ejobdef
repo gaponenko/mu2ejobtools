@@ -133,6 +133,10 @@ many randomly selected files from the list should be used per job.
 The --auxinput option can be repeated several times, the effect is
 cumulative.
 
+All job input files mentioned by the --inputs or --auxinput option
+must be listed by their base name, without any directory or protocol
+prefix.
+
 The square brackets [] in the explanations above denote optional
 settings, and {alternative1|alternative2} constructs denote mutually
 exclusive alternatives.  All option names may be abbreviates as long
