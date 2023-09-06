@@ -5,7 +5,7 @@ use autodie;
 use Getopt::Long;
 use File::Basename;
 #use Cwd 'abs_path';
-#use JSON;
+use JSON;
 
 use English qw( -no_match_vars ) ; # Avoids regex performance penalty
 use strict;
@@ -60,7 +60,10 @@ sub help_on_locations {
     }
     if($args{ALLOW_LOCAL}) {
         my $loc = "/abs/dir/name";
-        $res .= sprintf("%-16s Read files from the given local directory.\n\n", $loc);
+        $res .= sprintf("%-16s "
+                        ."Read files from the given local directory\n"
+                        .(' 'x16)." specified by its absolute pathname.\n\n",
+                        $loc);
     }
 
    return $res;
@@ -112,8 +115,10 @@ EOF
 my %opt;
 
 GetOptions(\%opt,
-           'protocol=s',
-           'location=s',
+           'default-location=s',
+           'location=s@',
+           'default-protocol=s',
+           'protocol=s@',
            'help',
     )
     or die "\nError processing command line options.\n";
@@ -123,7 +128,19 @@ if($opt{'help'}) {
     exit 0;
 }
 
+print "Got opt = \n", Dumper(%opt), "\n";
+
+my %spec = (
+    "dts.mu2e.MuBeamFlashCat.MDC2020p.001201_00000000.art" => [proto_file, 'tape'],
+    );
+
+print "spec = ", Dumper(%spec), "\n";
+
+my $js = JSON->new->pretty;
+my $jsstr = $js->encode(\%spec) . "\n";
+
+print "jsstr = $jsstr\n";
+
 print "doing something\n";
 
 #================================================================
-
