@@ -25,10 +25,13 @@ use Mu2eFilename;
 use constant filename_json => 'jobpars.json';
 use constant filename_fcl => 'mu2e.fcl';
 
+
+#FIXME BEGIN: remove this
 use constant proto_file => 'file';
 use constant proto_root => 'root';
 
 use constant location_local => 'local'; # others come from Mu2eFNBase.pm
+#FIXME END
 
 #================================================================
 sub doubleQuote {
