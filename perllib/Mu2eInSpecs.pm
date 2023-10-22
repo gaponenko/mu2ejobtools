@@ -5,14 +5,25 @@ use warnings;
 
 package Mu2eInSpecs;
 use Exporter qw ( import );
+
+use Mu2eFNBase;
+
 use Carp;
 use Data::Dumper; # for debugging
 
 use constant proto_file => 'file';
 use constant proto_ifdh => 'ifdh';
 use constant proto_root => 'root';
-
 my @all_protocols = ( proto_file, proto_ifdh, proto_root );
+
+use constant location_local => 'dir'; # others come from Mu2eFNBase.pm
+
+our @EXPORT = qw(
+    proto_file
+    proto_ifdh
+    proto_root
+    location_local
+    );
 
 #================================================================
 sub new {
@@ -32,6 +43,8 @@ sub new {
         dslist => $dsref,
         protocols => [ @all_protocols ],
         dsproto => {}, # individual ds to protocol settings
+        locations => [ @all_protocols ],
+        dsloc => {}, # individual ds to location settings
     }, $class;
 
     return $self;
@@ -62,6 +75,21 @@ sub protocol {
         unless defined $proto;
 
     return $proto;
+}
+
+#================================================================
+# returns location for files in a given dataset
+sub location {
+    my ($self, $dsname) = @_;  # one at a time, not a dslist
+
+    my $lmap = $self->{dsloc};
+
+    my $loc = $lmap->{$dsname} // $self->{default_location};
+
+    croak "Mu2eInSpecs::locations(): no information for dataset \"$dsname\" and no default"
+        unless defined $loc;
+
+    return $loc;
 }
 
 #================================================================
@@ -96,6 +124,8 @@ sub option_defs {
         (
          'default-protocol=s',
          'protocol=s@',
+         'default-location=s',
+         'location=s@',
         );
 }
 
@@ -106,6 +136,8 @@ sub help_opts {
     return _prefix_text_block $prefix, <<EOF
 [--default-protocol <protocol>]\\
 [--protocol <dataset>:<protocol>]\\
+[--default-location <location>]\\
+[--location <dataset>:<location>]\\
 EOF
         ;
 }
@@ -113,6 +145,8 @@ EOF
 sub help_explanation {
     my ($self, $prefix) = @_;
     $prefix = '' unless defined $prefix;
+
+    my $lloc = location_local;
 
     return _prefix_text_block $prefix, <<EOF
 --default-protocol  <protocol>
@@ -124,15 +158,47 @@ EOF
 . <<EOF
 --protocol  <dsname>:<protocol>
   Use the specified protocol to access files from the given dataset.
+
+--default-location <location>
+  Sets the default location that can be overriden for individual
+  datasets.  The possible values of <location> are the Mu2e-standard
+
+EOF
+        . _prefix_text_block(' 'x8, join("\n", Mu2eFNBase::standard_locations()))
+. <<EOF
+
+
+  or an absolute path to a directory where all dataset files have been placed,
+  prefixed with the $lloc: literal string:
+
+        $lloc:</path/to/files>
+
+--location <dsname>:<location>
+  The files for the given dataset should be taken from this location.
+
 EOF
         ;
 }
 
 #================================================================
+sub _validate_location {
+    my $loc = shift;
+
+    if(grep { $_ eq $loc } Mu2eFNBase::standard_locations()) {
+        return 1;
+    }
+
+    my ($prefix, $dir) = split /:/, $loc, 2;
+    return 0 unless $prefix eq location_local;
+    return 0 unless $dir =~ m|^/|;
+    return 1;
+}
+
 sub parse_useropts {
     my $self = shift;
     my %opt = @_;
 
+    #----------------------------------------------------------------
     my $dfp = $opt{'default-protocol'};
     if(defined $dfp) {
         croak "Error: --default-protocol option: \"$dfp\" is not a valid protocol"
@@ -160,13 +226,52 @@ sub parse_useropts {
         }
     }
 
-    # Check that that we have a complete set of information for the listed datasets
+    # Check that that we have a complete set of protocol information for the listed datasets
     if(not defined $self->{default_proto}) {
         foreach my $ds (@{$self->{dslist}}) {
             croak "Error: protocol for dataset \"$ds\" is not set and there is no default"
                 unless defined $self->{dsproto}->{$ds};
         }
     }
+
+    #----------------------------------------------------------------
+    my $dfl = $opt{'default-location'};
+    if(defined $dfl) {
+
+        croak "Error: --default-location option: \"$dfl\" is not a valid location"
+            unless _validate_location $dfl;
+
+        $self->{default_location} = $dfl;
+    }
+
+    my $dsl = $opt{'location'};
+    if(defined $dsl) {
+        foreach my $i (@$dsl) {
+            # This uses the fact that Mu2e dataset names can not contain columns
+            my ($ds, $loc) = split /:/, $i, 2;
+
+            croak "Errror: the --location option \"$i\" does not contain a ':'"
+                unless defined $loc;
+
+            croak "Error: --location option: \"$loc\" is not a valid location"
+                unless _validate_location $loc;
+
+            croak "Error: --location option: \"$ds\" is not on the dataset list.\n"
+                ."Known datasets are:\n" . join("\n", @{$self->{dslist}}) . "\n"
+                unless 0 + grep { $_ eq $ds } @{$self->{dslist}};
+
+            $self->{dsloc}->{$ds} = $loc;
+        }
+    }
+
+    # Check that that we have a complete set of location information for the listed datasets
+    if(not defined $self->{default_location}) {
+        foreach my $ds (@{$self->{dslist}}) {
+            croak "Error: location for dataset \"$ds\" is not set and there is no default"
+                unless defined $self->{dsloc}->{$ds};
+        }
+    }
+
 }
 
 1
