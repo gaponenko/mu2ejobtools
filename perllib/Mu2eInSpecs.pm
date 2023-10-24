@@ -33,14 +33,8 @@ sub new {
     croak "Mu2eInSpecs constructor should not be called on an existing instance"
         if ref $class;
 
-    # Freeze the list of datasets in the constructor so that consistency
-    # checks can be done when cmdline options are parsed.
-    croak "Error: Mu2eInSpecs constructor's first argument"
-        ." must be a reference to an array of dataset names"
-        unless defined $dsref;
-
     my $self = bless {
-        dslist => $dsref,
+        dslist => [],
         protocols => [ @all_protocols ],
         dsproto => {}, # individual ds to protocol settings
         locations => [ @all_protocols ],
@@ -194,7 +188,16 @@ sub _validate_location {
     return 1;
 }
 
-sub parse_useropts {
+#================================================================
+# This should be called BEFORE parse_useropts()
+sub _define_datasets {
+    my $self = shift;
+    $self->{dslist} = [ @_ ];
+}
+
+#================================================================
+# Make sure the list of datasets is defined before calling this
+sub _parse_useropts {
     my $self = shift;
     my %opt = @_;
 
@@ -274,6 +277,19 @@ sub parse_useropts {
 
 }
 
+sub initialize {
+    my ($self, $ds, $opt) = @_;
+
+    croak "Mu2eInSpecs->init(): the second arg must be a reference to cmdline %opts"
+        unless ref($opt) eq 'HASH';
+
+    croak "Mu2eInSpecs->init(): the first arg must be a reference to a list of datasets"
+        unless ref($ds) eq 'ARRAY';
+
+    $self->_define_datasets(@$ds);
+    $self->_parse_useropts(%$opt);
+}
+
 1
 ;
 #================================================================
@@ -290,7 +306,7 @@ protocol and location of files from each of the datasets, and then can
 be queried to tell location and input protocol for each of the
 datasets.   A new instance created with
 
-    my $sp = Mu2eInSpecs->new(\@dslist);
+    my $sp = Mu2eInSpecs->new();
 
 starts with all known protocols (file, root, ifdh) enabled.
 One can call
@@ -312,17 +328,17 @@ things up.   Of course there is also a
     $sp->option_defs();
 
 that returns a list of options for use with GetOptions from
-Getopt::Long.   Once the user provided options are retrieved
-by GetOptions(\%opt, ...),  use
+Getopt::Long.  Once a list dataset of interest is prepared in @dslist,
+and user provided options are retrieved by GetOptions(\%opt, ...), use
 
-   $sp->parse_useropts(%opt);
+   $sp->initialize(\@dslist, \%opt);
 
 to do the processing.  This is where most consistency checks
 are done, a successful return from that method means the object
 has complete information on protocols and locations for all
 the datasets given in the constructor.  (And that the command
-line did not mangle dataset names with typos, any dataset
-listed on the command line must be on the original @dslist.)
+line did not mangle dataset names with typos, as dataset
+listed on the command line is required to be in @dslist.)
 
 =head1 AUTHOR
 
