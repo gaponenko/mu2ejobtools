@@ -29,7 +29,6 @@ our @EXPORT = qw(
 #================================================================
 sub new {
     my $class = shift;
-    my ( $dsref ) = @_;
 
     croak "Mu2eInSpecs constructor should not be called on an existing instance"
         if ref $class;
