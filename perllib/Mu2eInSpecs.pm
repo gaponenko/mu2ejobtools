@@ -7,6 +7,7 @@ package Mu2eInSpecs;
 use Exporter qw ( import );
 
 use Mu2eFNBase;
+use Mu2eFilename;
 
 use Carp;
 use Data::Dumper; # for debugging
@@ -84,6 +85,23 @@ sub location {
         unless defined $loc;
 
     return $loc;
+}
+
+#================================================================
+# returns the absolute path name for a Mu2e file using its location
+sub abspathname {
+    my ($self, $basename) = @_;
+    my $fn = Mu2eFilename->parse($basename);
+    my $ds = $fn->dataset->dsname;
+    my $loc = $self->location($ds);
+    my ($std, $dir) = split /:/, $loc, 2;
+
+    if($std eq location_local) {
+        return $dir . '/' . $basename;
+    }
+    else {
+        return $fn->abspathname($loc);
+    }
 }
 
 #================================================================
@@ -263,6 +281,8 @@ sub _parse_useropts {
                 ."Known datasets are:\n" . join("\n", @{$self->{dslist}}) . "\n"
                 unless 0 + grep { $_ eq $ds } @{$self->{dslist}};
 
+            $loc =~ s|/*$||;
+
             $self->{dsloc}->{$ds} = $loc;
         }
     }
@@ -300,11 +320,9 @@ Mu2eInSpecs - information about input protocol and file location for Mu2e datase
 
 =head1 DESCRIPTION
 
-The Mu2eInSpecs class takes a list of dataset names in its
-constructor, processes options given on the command line that define
-protocol and location of files from each of the datasets, and then can
-be queried to tell location and input protocol for each of the
-datasets.   A new instance created with
+The Mu2eInSpecs class provides information about input
+protocol and location for files in a pre-defined list
+of datasets.  A new instance created with
 
     my $sp = Mu2eInSpecs->new();
 
@@ -339,6 +357,12 @@ has complete information on protocols and locations for all
 the datasets given in the constructor.  (And that the command
 line did not mangle dataset names with typos, as dataset
 listed on the command line is required to be in @dslist.)
+
+Once an instance has been initialized, it can be queried with
+
+   $sp->protocol($datasetname);
+   $sp->location($datasetname);
+   $sp->abspathname($file_basename);
 
 =head1 AUTHOR
 
