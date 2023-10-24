@@ -21,10 +21,15 @@ use Mu2eDSName;
 use lib dirname($0) . '/../perllib/';
 use mu2ejobtools qw(:DEFAULT doubleQuote
                     filename_json filename_fcl
-                    proto_file proto_root location_local
                     );
 
+use Mu2eInSpecs;
+
 use Data::Dumper; # for debugging
+
+
+my $sp = Mu2eInSpecs->new;
+$sp->disable_protocol(proto_ifdh);
 
 #================================================================
 sub my_random {
@@ -35,7 +40,7 @@ sub my_random {
 
     # the result should be the same on all systems
     # as long as the use of hexdigest is portable.
-    my $rnd = hex substr($h->hexdigest, 0, 8);
+    my $rnd = hex substr($h->hexdigest, 0, 8);  #FIXME: increase this from 32 bits?  we may have 10^6 files...
     return $rnd;
 }
 
@@ -87,35 +92,34 @@ sub aux_inputs($$) {
 }
 
 #================================================================
-sub format_filenames($$$$) {
-    my ($proto, $loc, $dir, $list) = @_;
+sub format_filenames($$) {
+    my ($sp, $list) = @_;
 
-    if($proto eq 'file') {
-        if($loc eq 'local') {
-            return map { $dir . '/' . $_ } @$list;
+    my @res;
+
+    foreach my $i (@$list) {
+        my $apn = $sp->abspathname($i);
+        my $dsn = Mu2eFilename->parse($i)->dataset->dsname;
+        my $proto = $sp->protocol($dsn);
+        if($proto eq proto_file) {
+            push @res, $apn;
         }
-        else { # supposed to be a standard mu2efilename location
-            return map {
-                my $fn = Mu2eFilename->parse($_);
-                $fn->abspathname($loc);
-            } @$list;
-        }
-    }
-    elsif($proto eq 'root') {
-        return map {
-            my $fn = Mu2eFilename->parse($_);
-            my $url = $fn->abspathname($loc);
+        elsif($proto eq proto_root) {
 
             # the substitution is documented here
             # https://mu2ewiki.fnal.gov/wiki/DataTransfer#Load_balancer_door
-            $url =~ s|^/pnfs/|xroot://fndcadoor.fnal.gov//pnfs/fnal.gov/usr/|;
-            $url;
+            $apn =~ s|^/pnfs/|xroot://fndcadoor.fnal.gov//pnfs/fnal.gov/usr/|
+                or die "Error: root protocol requested"
+                ." but a file pathname does not start with /pnfs: $apn\n";
 
-        } @$list;
+            push @res, $apn;
+        }
+        else {
+            die "Error: unknown protocol $proto\n";
+        }
     }
-    else {
-        die "Error: unknown protocol $proto\n";
-    }
+
+    return @res;
 }
 
 #================================================================
@@ -144,27 +148,28 @@ sub get_sequencer($$) {
 #================================================================
 sub usage() {
     my $self = basename($0);
-    my $protostr = '' . proto_file . ',' . proto_root;
-    my $stdlocs = join ',', Mu2eFNBase::standard_locations();
+
+    my $inspec_opts = $sp->help_opts(' 'x11);
+    chomp $inspec_opts;
+
+    my $inspec_help = $sp->help_explanation(' 'x11);
+    chomp $inspec_help;
+
     return <<EOF
 Usage:
         $self \\
            --parfile=cnf.tar \\
            --index=<uint> \\
-           [--protocol={$protostr}] \\
-           [--location={$stdlocs,local:dir}] \\
+$inspec_opts
            [-h|--help]
 
 This script prints out fcl config for a job with the given index in
 the set of jobs defined by the parfile.  If the job needs any inputs,
-their location and access protocol must be specified.
+their location and access protocol must be specified using the
+following options:
 
-In addition to the Mu2e-standard file locations $stdlocs in /pnfs,
-this script supports 'local' files.  This is useful to run on files
-that have been downloaded (e.g. using ifdh) to a directory on the
-current node; the directory must be specified in this case.  The
-'local' option only makes sense with the 'file' access protocol.
-
+$inspec_help
+           --help or -h   prints out this message and stops processing.
 EOF
 }
 
@@ -174,8 +179,7 @@ my %opt;
 GetOptions(\%opt,
            'parfile=s',
            'index=i',
-           'protocol=s',
-           'location=s',
+           $sp->option_defs(),
            'help',
     )
     or die "\nError processing command line options.\n";
@@ -197,12 +201,6 @@ die "Error: --index is required\n" unless defined $opt{'index'};
 my $index = $opt{'index'};
 die "Error: --index must be non-negative, got: $index\n" if $index < 0;
 
-#================================================================
-# Look at the json to determine if --protocol and --location are required
-
-my $proto = $opt{'protocol'};
-my $loc = $opt{'location'};
-my $dirprefix = ''; # used for the 'local' location
 
 my $jsstr = get_tar_member($pfname, filename_json);
 die "Error: could not extract '". filename_json ."' from '$pfname'\n"
@@ -213,34 +211,8 @@ my $tbs = $js->{'tbs'};
 die "Error: could not extract tbs from the json\n"
     unless defined $tbs;
 
-# Input files can come from inputs or auxin blocks
-if($tbs->{'inputs'} || $tbs->{'auxin'}) {
-
-    die "Error --protocol must be specified for job configs that use input files.\n"
-        unless defined $proto;
-
-    ($proto eq proto_file) or ($proto eq proto_root)
-        or die "Error: unknown protocol $proto\n";
-
-    die "Error --location must be specified for job configs that use input files.\n"
-    unless defined $loc;
-
-    unless (grep  /^$loc$/, Mu2eFNBase::standard_locations()) {
-        # non-standard file location
-        my @toks = split /:/, $loc, 2;
-
-        die "Error: unknown location ",$toks[0],"\n"
-            unless $toks[0] eq location_local;
-
-        $loc = location_local;
-        die "Error: directory prefix must be spedified for the ".location_local." case\n"
-            unless defined $toks[1] and $toks[1] ne '';
-        $dirprefix = $toks[1];
-
-        die "Error: location $loc only makes sense for the 'file' protocol, got $proto\n"
-            unless $proto eq proto_file;
-    }
-}
+my @dslist = get_datasets($js);
+$sp->initialize(\@dslist, \%opt);
 
 #================================================================
 # is the index in range?
@@ -271,7 +243,7 @@ if(my $in = $tbs->{'inputs'}) {
 
     $fb .= "$k: [\n    "
         . join(",\n    ",
-               doubleQuote(format_filenames($proto, $loc, $dirprefix, \@jobinputs)))
+               doubleQuote(format_filenames($sp, \@jobinputs)))
         . "\n]\n";
 }
 
@@ -295,7 +267,7 @@ if(my $au = $tbs->{'auxin'}) {
 
         $fb .= "$k: [\n    "
             . join(",\n    ",
-                   doubleQuote(format_filenames($proto, $loc, $dirprefix, \@infiles)))
+                   doubleQuote(format_filenames($sp, \@infiles)))
             . "\n]\n";
     }
 }
