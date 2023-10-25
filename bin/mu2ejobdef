@@ -20,10 +20,8 @@ use Mu2eFilename;
 use Mu2eDSName;
 
 use lib dirname($0) . '/../perllib/';
-use mu2ejobtools qw(
-                    filename_json filename_fcl
-                    doubleQuote
-                    );
+use mu2ejobtools;
+use Mu2eJobPars;
 
 use Data::Dumper; # for debugging
 

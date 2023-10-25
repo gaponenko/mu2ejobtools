@@ -3,19 +3,13 @@
 # A.Gaponenko, 2023
 #
 
-use Getopt::Long;
-use File::Basename;
-use JSON;
-use Archive::Tar;
-use Digest::MD5; # Archive::Tar should have requested this itself...
-use English qw( -no_match_vars ) ; # Avoids regex performance penalty
 use strict;
 use warnings;
+use Getopt::Long;
+use File::Basename;
 
 use lib dirname($0) . '/../perllib/';
-use mu2ejobtools qw(:DEFAULT
-                    filename_json
-                    );
+use Mu2eJobPars;
 
 use Data::Dumper; # for debugging
 
@@ -82,27 +76,25 @@ die "What is the query?\n" unless $nopt;
 die "Error: multiple queries\n" unless $nopt == 1;
 
 my $pfname = $ARGV[0];
-my $jsstr = get_tar_member($pfname, filename_json)
-   or die "Error: can not extract ". filename_json ." from $pfname.\n";
 
-my $js = JSON->new->decode($jsstr);
+my $jp = Mu2eJobPars->new($pfname);
 
 #================================================================
 if( $opt{'jobname'} ) {
-    my $jobname = $js->{'jobname'}
+    my $jobname =  $jp->json->{'jobname'}
        or die "Error: no jobname in $pfname\n";
     print $jobname, "\n";
 }
 
 #================================================================
 if( $opt{'njobs'} ) {
-    my $nj = get_njobs($js);
+    my $nj = $jp->get_njobs();
     print "$nj\n";
 }
 
 #================================================================
 if( $opt{'datasets'} ) {
-    my @dss = get_datasets($js);
+    my @dss = $jp->get_datasets();
     print "@dss\n";
 }
 
@@ -110,7 +102,7 @@ if( $opt{'datasets'} ) {
 if( $opt{'codesize'} ) {
     my $sz = 0;
 
-    if(my $codename = $js->{'code'}) {
+    if(my $codename = $jp->json->{'code'}) {
         my $tar = Archive::Tar->new();
 
         # We do not need to store the content of the code tarball in
@@ -130,7 +122,7 @@ if( $opt{'codesize'} ) {
 
 #================================================================
 if( $opt{'setup'} ) {
-    if(my $code = $js->{'code'}) {
+    if(my $code = $jp->json->{'code'}) {
         open(my $in, '-|',
              'tar', '--extract', '--to-stdout', "--file=$pfname", $code)
             or die "Error running tar on $pfname\n";
@@ -150,7 +142,7 @@ if( $opt{'setup'} ) {
         close($out) or die "Error closing output tar pipe: $!\n";
     }
 
-    my $sf = $js->{'setup'} or die "Error: no setup in JSON\n";
+    my $sf = $jp->json->{'setup'} or die "Error: no setup in JSON\n";
     print "source $sf\n";
 }
 

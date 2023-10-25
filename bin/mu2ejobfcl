@@ -19,11 +19,9 @@ use Mu2eFilename;
 use Mu2eDSName;
 
 use lib dirname($0) . '/../perllib/';
-use mu2ejobtools qw(:DEFAULT doubleQuote
-                    filename_json filename_fcl
-                    );
-
+use mu2ejobtools;
 use Mu2eInSpecs;
+use Mu2eJobPars;
 
 use Data::Dumper; # for debugging
 
@@ -201,23 +199,16 @@ die "Error: --index is required\n" unless defined $opt{'index'};
 my $index = $opt{'index'};
 die "Error: --index must be non-negative, got: $index\n" if $index < 0;
 
+my $jp = Mu2eJobPars->new($pfname);
 
-my $jsstr = get_tar_member($pfname, filename_json);
-die "Error: could not extract '". filename_json ."' from '$pfname'\n"
-    unless defined $jsstr;
+my $tbs = $jp->json->{'tbs'};
 
-my $js = JSON->new->decode($jsstr);
-my $tbs = $js->{'tbs'};
-die "Error: could not extract tbs from the json\n"
-    unless defined $tbs;
-
-my @dslist = get_datasets($js);
-$sp->initialize(\@dslist, \%opt);
+$sp->initialize([$jp->get_datasets()], \%opt);
 
 #================================================================
 # is the index in range?
 
-if(my $njobs = get_njobs($js)) {
+if(my $njobs = $jp->get_njobs()) {
     die "Zero based index $index is too large for njobs = $njobs\n"
         unless $index < $njobs;
 }
@@ -283,7 +274,7 @@ $fb .=
     "#----------------------------------------------------------------\n";
 
 #================================================================
-my $orig_fcl = get_tar_member($pfname, filename_fcl);
+my $orig_fcl = $jp->get_tar_member(filename_fcl);
 die "Error: could not extract '". filename_fcl ."' from '$pfname'\n"
     unless defined $orig_fcl;
 
