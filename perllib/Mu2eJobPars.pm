@@ -69,11 +69,11 @@ sub json {
 }
 
 #================================================================
-sub get_njobs {
+sub njobs {
     my ($self) = @_;
 
     my $tbs = $self->json->{'tbs'}
-    or croak "Error: get_njobs(): could not extract tbs"
+    or croak "Error: njobs(): could not extract tbs"
         . " from the json for file ".$self->parfilename."\n";
 
     my $njobs = 0;
@@ -90,11 +90,11 @@ sub get_njobs {
 
 #================================================================
 # arg is the top-level json object
-sub get_datasets {
+sub input_datasets {
     my ($self) = @_;
 
     my $tbs = $self->json->{'tbs'}
-    or croak "Error: get_njobs(): could not extract tbs"
+    or croak "Error: njobs(): could not extract tbs"
         . " from the json for file ".$self->parfilename."\n";
 
     my %datasets; # use hash to remove the dups
@@ -130,7 +130,28 @@ Mu2eJobPars - a class to query information in a Mu2e job parameter file
 
 =head1 DESCRIPTION
 
-The Mu2eJobPars class....
+To create an instance of the Mu2eJobPars class use
+
+    my $jp = Mu2eJobPars->new($parfilename);
+
+where $parfilename is the name of a "Mu2e job parameters file"
+that was previously created with the mu2ejobdef script.
+Mu2eJobPars methods allow to query (but not modify) information
+in the jobpar file.
+
+    $jp->njobs()
+    Returns the number of defined jobs, 0 means unlimited.
+
+    $jp->input_datasets()
+    Returns a list of all datasets used by all the defined jobs.  (A
+    dataset gets on the list if there is a file from that dataset used
+    either as primary or secondary input for any of the jobs.)
+
+    $jp->json()
+    returns the toplevel JSON object in the file
+
+    $jp->get_tar_member($name)
+    returns the content of the named file stored in jobpars.
 
 =head1 AUTHOR
 

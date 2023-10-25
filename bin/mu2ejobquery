@@ -88,7 +88,7 @@ if( $opt{'jobname'} ) {
 
 #================================================================
 if( $opt{'njobs'} ) {
-    my $nj = $jp->get_njobs();
+    my $nj = $jp->njobs();
     print "$nj\n";
 }
 

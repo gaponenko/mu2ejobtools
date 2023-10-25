@@ -203,12 +203,12 @@ my $jp = Mu2eJobPars->new($pfname);
 
 my $tbs = $jp->json->{'tbs'};
 
-$sp->initialize([$jp->get_datasets()], \%opt);
+$sp->initialize([$jp->input_datasets()], \%opt);
 
 #================================================================
 # is the index in range?
 
-if(my $njobs = $jp->get_njobs()) {
+if(my $njobs = $jp->njobs()) {
     die "Zero based index $index is too large for njobs = $njobs\n"
         unless $index < $njobs;
 }
