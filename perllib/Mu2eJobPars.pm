@@ -123,6 +123,117 @@ sub input_datasets {
 }
 
 #================================================================
+sub job_primary_inputs {
+    my ($self, $index) = @_;
+
+    my $res = {};
+
+    if(my $in = $self->{'json'}->{'tbs'}->{'inputs'}) {
+        my ($k, $v) = %$in;
+        my $merge = $v->[0];
+        my $filelist = $v->[1];
+
+        # skip the first $index * $merge files,
+        # then take what is left, up to $merge
+        my $nf = scalar(@$filelist);
+        my $first = $index*$merge;
+        my $last = $first + $merge - 1;
+        $last = $nf - 1 if $nf - 1 < $last;
+
+        die "primary_inputs(): invalid index $index\n"
+            unless $first <= $last; # no emtpy lists
+
+        $res->{$k} = [ @$filelist[$first .. $last] ];
+    }
+
+    return $res;
+}
+
+#================================================================
+sub _my_random {
+    my $h = Digest->new("SHA-256");
+    foreach my $i (@_) {
+        $h->add($i);
+    }
+
+    # the result should be the same on all systems
+    # as long as the use of hexdigest is portable.
+    my $rnd = hex substr($h->hexdigest, 0, 8);  #FIXME: increase this from 32 bits?  we may have 10^6 files...
+    return $rnd;
+}
+
+#================================================================
+sub job_aux_inputs {
+    my ($self, $index) = @_;
+
+    my $res = {};
+
+    if(my $au = $self->{'json'}->{'tbs'}->{'auxin'}) {
+
+        keys %$au; # reset the iterator
+        while(my ($k, $v) = each (%$au)) {
+
+            my $nreq = $v->[0];
+            my @infiles = @{$v->[1]};
+
+            # zero means take all files
+            $nreq = scalar(@infiles) unless $nreq;
+
+            # We want to draw nreq "random" files from the list, without
+            # repetitions.
+            my @sample;
+            for(my $count = 0; $count < $nreq; ++$count) {
+
+                # The "random" part has to be reproducible. Instead of relying on
+                # an external random number generator, make one from our inputs.
+                my $rnd = _my_random($index, @infiles);
+                my $index = $rnd % scalar(@infiles);
+                push @sample, $infiles[$index];
+                splice @infiles, $index, 1; # drop the file we just used from inputs
+            }
+
+            $res->{$k} = [ @sample ];
+        }
+    }
+
+    return $res;
+}
+
+#================================================================
+# returns a hash ref { fcl_key => [ @files ] }
+sub job_inputs {
+    my ($self, $index) = @_;
+
+    return { %{$self->primary_inputs($index)},
+                 %{$self->aux_inputs($index)} };
+}
+
+#================================================================
+# See https://mu2ewiki.fnal.gov/wiki/FileNames#sequencer
+sub sequencer {
+    my ($self, $index) = @_;
+
+    my $pin = $self->primary_inputs($index);
+
+    if(%$pin) {
+        my ($k, $files) = %$pin;
+        my @seqs = map { my $f = Mu2eFilename->parse($_); $f->sequencer } @$files;
+        # if input file names use a consistent formatting for the sequencer
+        # then string sort will do what is needed
+        @seqs = sort @seqs;
+        return $seqs[0];
+    }
+    elsif(my $evid = $self->{'json'}->{'tbs'}->{'event_id'}) {
+        my $run = $evid->{'source.firstRun'}
+        or die "Error: get_sequencer(): can not get source.firstRun from event_id\n";
+        my $subrun = $index;
+        return sprintf('%06d_%08d', $run, $subrun);
+   }
+
+    die "Error: get_sequencer(): unsupported JSON content\n";
+}
+
+#================================================================
 __END__
 =head1 NAME
 
@@ -139,6 +250,9 @@ that was previously created with the mu2ejobdef script.
 Mu2eJobPars methods allow to query (but not modify) information
 in the jobpar file.
 
+These methods return information pertaining to the job pars file as a
+whole:
+
     $jp->njobs()
     Returns the number of defined jobs, 0 means unlimited.
 
@@ -152,6 +266,19 @@ in the jobpar file.
 
     $jp->get_tar_member($name)
     returns the content of the named file stored in jobpars.
+
+There are also methods that return information for a single job number
+$index defined by the par file:
+
+    $jp->job_inputs($index);
+    $jp->job_primary_inputs($index);
+    $jp->job_aux_inputs($index);
+    Return a reference to a (possibly empty) hash.  The keys of the
+    hash are FCL keys for the inputs (one or zero for
+    primary_inputs(), arbitrary number for aux_inputs).  The values
+    are references to arrays that contain basenames of the input
+    files.  job_inputs() is a union of primary_inputs() and
+    aux_inputs().
 
 =head1 AUTHOR
 

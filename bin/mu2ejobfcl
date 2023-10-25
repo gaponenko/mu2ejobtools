@@ -3,17 +3,15 @@
 # A.Gaponenko, 2023
 #
 
+use strict;
+use warnings;
+no warnings 'portable'; # otherwise complaints about exceeding 32-bit integers
+
 use Getopt::Long;
 use File::Basename;
 use Cwd 'abs_path';
 use Fcntl qw(:DEFAULT);
 use JSON;
-use Archive::Tar;
-use Digest;
-use English qw( -no_match_vars ) ; # Avoids regex performance penalty
-use strict;
-use warnings;
-no warnings 'portable'; # otherwise complaints about exceeding 32-bit integers
 
 use Mu2eFilename;
 use Mu2eDSName;
@@ -28,66 +26,6 @@ use Data::Dumper; # for debugging
 
 my $sp = Mu2eInSpecs->new;
 $sp->disable_protocol(proto_ifdh);
-
-#================================================================
-sub my_random {
-    my $h = Digest->new("SHA-256");
-    foreach my $i (@_) {
-        $h->add($i);
-    }
-
-    # the result should be the same on all systems
-    # as long as the use of hexdigest is portable.
-    my $rnd = hex substr($h->hexdigest, 0, 8);  #FIXME: increase this from 32 bits?  we may have 10^6 files...
-    return $rnd;
-}
-
-#================================================================
-# returns a list of basenames
-sub primary_inputs($$) {
-    my ($index, $in) = @_;
-    my ($k, $v) = %$in;
-    my $merge = $v->[0];
-    my $filelist = $v->[1];
-
-    # skip the first $index * $merge files,
-    # then take what is left, up to $merge
-    my $nf = scalar(@$filelist);
-    my $first = $index*$merge;
-    my $last = $first + $merge - 1;
-    $last = $nf - 1 if $nf - 1 < $last;
-
-    die "primary_inputs(): invalid index $index\n"
-        unless $first <= $last; # no emtpy lists
-
-    return @$filelist[$first .. $last];
-}
-
-#================================================================
-# returns a list of basenames
-sub aux_inputs($$) {
-    my ($index, $ai) = @_;
-    my $nreq = $ai->[0];
-    my @infiles = @{$ai->[1]};
-
-    # zero means take all files
-    $nreq = scalar(@infiles) unless $nreq;
-
-    # We want to draw nreq "random" files from the list, without
-    # repetitions.
-    my @res;
-    for(my $count = 0; $count < $nreq; ++$count) {
-
-        # The "random" part has to be reproducible. Instead of relying on
-        # an external random number generator, make one from our inputs.
-        my $rnd = my_random($index, @infiles);
-        my $index = $rnd % scalar(@infiles);
-        push @res, $infiles[$index];
-        splice @infiles, $index, 1; # drop the file we just used from inputs
-    }
-
-    return @res;
-}
 
 #================================================================
 sub format_filenames($$) {
@@ -118,29 +56,6 @@ sub format_filenames($$) {
     }
 
     return @res;
-}
-
-#================================================================
-sub get_sequencer($$) {
-    my ($index, $tbs) = @_;
-
-    # See https://mu2ewiki.fnal.gov/wiki/FileNames#sequencer
-    if(my $in = $tbs->{'inputs'}) {
-        my @files = primary_inputs($index, $in);
-        my @seqs = map { my $f = Mu2eFilename->parse($_); $f->sequencer } @files;
-        # if input file names use a consistent formatting for the sequencer
-        # then string sort will do what is needed
-        @seqs = sort @seqs;
-        return $seqs[0];
-    }
-    elsif(my $evid = $tbs->{'event_id'}) {
-        my $run = $evid->{'source.firstRun'}
-        or die "Error: get_sequencer(): can not get source.firstRun from event_id\n";
-        my $subrun = $index;
-        return sprintf('%06d_%08d', $run, $subrun);
-   }
-
-    die "Error: get_sequencer(): unsupported JSON content\n";
 }
 
 #================================================================
@@ -228,38 +143,25 @@ if($tbs->{'event_id'}) {
 }
 
 #----------------------------------------------------------------
-if(my $in = $tbs->{'inputs'}) {
-    my ($k, $v) = %$in;
-    my @jobinputs = primary_inputs($index, $in);
+my $inputs = $jp->job_inputs($index);
+foreach my $k (keys  %$inputs) {
+    my $v = $inputs->{$k}; # pay the price to avoid the fragile each(%hash)
 
     $fb .= "$k: [\n    "
         . join(",\n    ",
-               doubleQuote(format_filenames($sp, \@jobinputs)))
+               doubleQuote(format_filenames($sp, $v)))
         . "\n]\n";
+
 }
 
 #----------------------------------------------------------------
 if(my $out = $tbs->{'outfiles'}) {
-    my $seq = get_sequencer($index, $tbs);
+    my $seq = $jp->sequencer($index);
     keys %$out; # reset the iterator, just in case
     while(my ($k, $v) = each(%$out)) {
         my $f = Mu2eFilename->parse($v);
         $f->sequencer($seq);
         $fb .= "$k: ".  doubleQuote($f->basename()) . "\n";
-    }
-}
-
-#----------------------------------------------------------------
-if(my $au = $tbs->{'auxin'}) {
-    keys %$au; # reset the iterator
-    while(my ($k, $v) = each(%$au)) {
-
-        my @infiles = aux_inputs($index, $v);
-
-        $fb .= "$k: [\n    "
-            . join(",\n    ",
-                   doubleQuote(format_filenames($sp, \@infiles)))
-            . "\n]\n";
     }
 }
 
