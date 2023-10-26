@@ -44,7 +44,6 @@ sub new {
     return $self;
 }
 
-
 #================================================================
 sub get_tar_member {
     my ($self, $membername) = @_;
@@ -69,6 +68,16 @@ sub json {
 }
 
 #================================================================
+sub jobname {
+    my ($self) = @_;
+    my $jobname = $self->{'json'}->{'jobname'};
+    croak "Error: no jobname in " . $self->{parfilename} . "\n"
+        unless defined $jobname;
+
+    return $jobname;
+}
+
+#================================================================
 sub njobs {
     my ($self) = @_;
 
@@ -89,7 +98,6 @@ sub njobs {
 }
 
 #================================================================
-# arg is the top-level json object
 sub input_datasets {
     my ($self) = @_;
 
@@ -120,6 +128,30 @@ sub input_datasets {
     }
 
     return keys %datasets;
+}
+
+#================================================================
+sub codesize {
+    my ($self) = @_;
+
+    my $sz = 0;
+
+    if(my $codename = $self->{'json'}->{'code'}) {
+        my $tar = Archive::Tar->new();
+
+        # We do not need to store the content of the code tarball in
+        # memory.  Use the md5 option here to drastically reduce
+        # memory consumption.
+        $tar->read($self->{'parfilename'}, 1, {md5 => 1, filter => qr{^$codename$} } );
+        my @props = ('size');
+        my @list = $tar->list_files(\@props);
+        die "Error extracting the size of arvhive member '$codename' in '".$self->{'parfilename'}."'\n"
+            unless @list;
+
+        $sz = $list[0]->{'size'};
+    }
+
+    return $sz;
 }
 
 #================================================================
@@ -200,7 +232,6 @@ sub job_aux_inputs {
 }
 
 #================================================================
-# returns a hash ref { fcl_key => [ @files ] }
 sub job_inputs {
     my ($self, $index) = @_;
 
@@ -302,8 +333,11 @@ that was previously created with the mu2ejobdef script.
 Mu2eJobPars methods allow to query (but not modify) information
 in the jobpar file.
 
-These methods return information pertaining to the job pars file as a
-whole:
+These methods return information pertaining to the job pars file,
+not to individual jobs
+
+    $jp->jobname()
+    Returns the name of the job set.
 
     $jp->njobs()
     Returns the number of defined jobs, 0 means unlimited.
@@ -316,8 +350,12 @@ whole:
     $jp->json()
     returns the toplevel JSON object in the file
 
+    $jp->codesize()
+    Return the size, in bytes, of the embedded code tarball.
+
     $jp->get_tar_member($name)
     returns the content of the named file stored in jobpars.
+
 
 There are also methods that return information for a single job number
 $index defined by the par file.  Any of the returned hashes may be empty,
@@ -331,6 +369,9 @@ meaning this group of FCL setting is not needed.
     for aux_inputs).  The values are references to arrays that contain
     basenames of the input files.  job_inputs() is a union of
     primary_inputs() and aux_inputs().
+
+    $jp->sequencer($index)
+    The sequencer, see https://mu2ewiki.fnal.gov/wiki/FileNames#sequencer
 
     $jp->job_outputs($index);
     Returns a reference to a hash mapping FCL keys to output file names.

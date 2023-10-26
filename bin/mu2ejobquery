@@ -81,9 +81,7 @@ my $jp = Mu2eJobPars->new($pfname);
 
 #================================================================
 if( $opt{'jobname'} ) {
-    my $jobname =  $jp->json->{'jobname'}
-       or die "Error: no jobname in $pfname\n";
-    print $jobname, "\n";
+    print $jp->jobname(), "\n";
 }
 
 #================================================================
@@ -100,24 +98,7 @@ if( $opt{'datasets'} ) {
 
 #================================================================
 if( $opt{'codesize'} ) {
-    my $sz = 0;
-
-    if(my $codename = $jp->json->{'code'}) {
-        my $tar = Archive::Tar->new();
-
-        # We do not need to store the content of the code tarball in
-        # memory.  Use the md5 option here to drastically reduce
-        # memory consumption.
-        $tar->read($pfname, 1, {md5 => 1, filter => qr{^$codename$} } );
-        my @props = ('size');
-        my @list = $tar->list_files(\@props);
-        die "Error extracting the size of arvhive member '$codename' in '$pfname'\n"
-            unless @list;
-
-        $sz = $list[0]->{'size'};
-    }
-
-    print $sz . "\n";
+    print $jp->codesize(), "\n";
 }
 
 #================================================================
