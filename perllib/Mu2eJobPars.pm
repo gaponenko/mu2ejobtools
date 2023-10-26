@@ -78,6 +78,16 @@ sub jobname {
 }
 
 #================================================================
+sub setup {
+    my ($self) = @_;
+    my $res = $self->{'json'}->{'setup'};
+    croak "Error: no setup in " . $self->{parfilename} . "\n"
+        unless defined $res;
+
+    return $res;
+}
+
+#================================================================
 sub njobs {
     my ($self) = @_;
 
@@ -152,6 +162,32 @@ sub codesize {
     }
 
     return $sz;
+}
+
+#================================================================
+sub extract_code {
+    my ($self) = @_;
+
+    if(my $code = $self->{'json'}->{'code'}) {
+        my $pfname = $self->{'parfilename'};
+        open(my $in, '-|',
+             'tar', '--extract', '--to-stdout', "--file=$pfname", $code)
+            or croak "Error running tar on $pfname\n";
+
+        open(my $out, '|-',
+             'tar', '--extract', '--bzip2', "--file=-")
+            or die "Error running code expansion tar\n";
+
+        my $BUFSIZE = 64 * (2**20);
+        my $buf;
+        while(read($in, $buf, $BUFSIZE)) {
+            print $out $buf
+                or die "Error extracting the code: $!\n";
+        }
+
+        close($in) or croak "Error closing input tar pipe: $!\n";
+        close($out) or croak "Error closing output tar pipe: $!\n";
+    }
 }
 
 #================================================================
@@ -343,19 +379,25 @@ not to individual jobs
     Returns the number of defined jobs, 0 means unlimited.
 
     $jp->input_datasets()
-    Returns a list of all datasets used by all the defined jobs.  (A
-    dataset gets on the list if there is a file from that dataset used
-    either as primary or secondary input for any of the jobs.)
+    Returns a list of all datasets used by the job set.  A dataset
+    gets on the list if there is a file from that dataset used either
+    as primary or secondary input for any of the jobs.
 
     $jp->json()
-    returns the toplevel JSON object in the file
+    Returns the toplevel JSON object in the file
 
     $jp->codesize()
-    Return the size, in bytes, of the embedded code tarball.
+    Returns the size, in bytes, of the embedded code tarball.
 
     $jp->get_tar_member($name)
-    returns the content of the named file stored in jobpars.
+    Returns the content of the named file stored in jobpars.
 
+    $jp->extract_code()
+    This call expands the embedded code tarball, if any, in the
+    current directory.  The return value is not meaningful.
+
+    $jp->setup()
+    Returns the name of the Offline setup file.
 
 There are also methods that return information for a single job number
 $index defined by the par file.  Any of the returned hashes may be empty,

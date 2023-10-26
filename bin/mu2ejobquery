@@ -18,32 +18,33 @@ sub usage() {
     my $self = basename($0);
     return <<EOF
 Usage:
-        $self [-h|--help] <query> cnf.tar
+    $self [-h|--help] <query> cnf.tar
 
 This script extracts and prints out information from the job parameter
-file cnf.tar
-
-The possible queries are
+file cnf.tar   The possible queries are
 
     --jobname  The name of the job set.
 
-    --njobs    The number of jobs in the set, zero means unlimited.
+    --njobs  The number of jobs in the set, zero means unlimited.
 
-    --datasets A list of all datasets used by the jobs.
+    --datasets  List of all datasets used by the job set.
 
-    --codesize The size of the compressed code tarball, in bytes.
-               This will print 0 if the job par file does not
-               contain code.
+    --codesize  The size of the compressed code tarball, in bytes.
+        This will print 0 if the job par file does not contain code.
 
-    --setup    Print out shell commands to perform Mu2e software setup
-               to run the job.  WARNING: if the job parameter file
-               includes a code tarball, it will  be expanded in the
-               current directory.  Cd to a suitable location before
-               running the --setup query.   The intended use is
+    --extract-code  This prints nothing, but expands the embedded code
+        tarball in the current directory.  This option does nothing if
+        there is no embedded code.
 
-               \$ \`mu2ejobquery --setup cnf.tar\`
+    --setup  Prints the name of the setup file.  A recommended way to
+        setup Offline environment for the jobs is the following
+        sequence of two commands (note the backticks).  This will do
+        the right thing whether the code is embedded or lives in
+        CVMFS.
 
-               note the backticks to execute the setup.
+        \$ mu2ejobquery --extract-code cnf.tar
+        \$ source \`mu2ejobquery --setup cnf.tar\`
+
 EOF
 }
 
@@ -55,6 +56,7 @@ GetOptions(\%opt,
            'njobs',
            'datasets',
            'codesize',
+           'extract-code',
            'setup',
            'help',
     )
@@ -102,29 +104,13 @@ if( $opt{'codesize'} ) {
 }
 
 #================================================================
+if( $opt{'extract-code'} ) {
+    $jp->extract_code();
+}
+
+#================================================================
 if( $opt{'setup'} ) {
-    if(my $code = $jp->json->{'code'}) {
-        open(my $in, '-|',
-             'tar', '--extract', '--to-stdout', "--file=$pfname", $code)
-            or die "Error running tar on $pfname\n";
-
-        open(my $out, '|-',
-             'tar', '--extract', '--bzip2', "--file=-")
-            or die "Error running code expansion tar\n";
-
-        my $BUFSIZE = 64 * (2**20);
-        my $buf;
-        while(read($in, $buf, $BUFSIZE)) {
-            print $out $buf
-                or die "Error extracting the code: $!\n";
-        }
-
-        close($in) or die "Error closing input tar pipe: $!\n";
-        close($out) or die "Error closing output tar pipe: $!\n";
-    }
-
-    my $sf = $jp->json->{'setup'} or die "Error: no setup in JSON\n";
-    print "source $sf\n";
+    print $jp->setup(), "\n";
 }
 
 #================================================================
