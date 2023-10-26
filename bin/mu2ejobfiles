@@ -1,0 +1,111 @@
+#!/usr/bin/perl -w
+#
+# A.Gaponenko, 2023
+#
+
+use strict;
+use warnings;
+use Getopt::Long;
+use File::Basename;
+
+use lib dirname($0) . '/../perllib/';
+use Mu2eJobPars;
+
+use Data::Dumper; # for debugging
+
+#================================================================
+sub usage() {
+    my $self = basename($0);
+    return <<EOF
+Usage:
+        $self --jobpar cnf.tar \\
+             [--inspec spec.json] \\
+             [--index uint] \\
+             [--stagedir /abs/path] \\
+             {--inputs|--outputs|--prestage-spec|--cmdline}
+
+This script has 4 mutually exclusive modes of operation:
+
+    --inputs   prints out basenames of input files for the given job
+
+    --outputs  prints out basenames of output files for the job
+
+    --prestage-spec  prints out a "prestage specification"
+        suitable for use with ifdh.
+
+    --cmdline prints out command line switches for mu2ejobfcl that
+        specify input protocols and file locations,
+
+There is also the
+
+     --help (or -h) options to print out this text and stop.
+EOF
+}
+
+#================================================================
+my %opt;
+
+GetOptions(\%opt,
+           'jobpar=s',
+           'inspec=s',
+           'index=i',
+           'stagedir=s',
+           'inputs',
+           'outputs',
+           'prestage-spec',
+           'cmdline',
+           'help',
+    )
+    or die "\nError processing command line options.\n";
+
+if($opt{'help'}) {
+    print usage();
+    exit 0;
+}
+
+my $ismode = sub { my ($k) = @_; return  scalar grep { $_ eq $k }
+                   qw/inputs outputs prestage-spec cmdline/;  };
+
+my @modes = grep { $ismode->($_) } keys %opt;
+
+die "Error: the running modes are mutually exclusive, got: @modes\n"
+    unless scalar(@modes) < 2;
+
+die "Error: a running mode must be specified\n"
+    unless scalar(@modes) == 1;
+
+my ($mode) = @modes;
+
+my $pfname = $opt{'jobpar'};
+die "Error: --jobpar is required" unless defined $pfname;
+
+my $jp = Mu2eJobPars->new($pfname);
+
+#================================================================
+if($mode eq 'inputs') {
+    my $index = $opt{'index'};
+    die "The --inputs mode requires --index\n" unless defined $index;
+
+    my @files = sort map { @{$_} }
+     values %{$jp->job_inputs($index)};
+
+    print join("\n", @files), "\n";
+}
+
+#================================================================
+if($mode eq 'outputs') {
+    ...
+}
+
+#================================================================
+if($mode eq 'prestage-spec') {
+    ...
+}
+
+#================================================================
+if($mode eq 'cmdline') {
+    ...
+}
+
+#================================================================
+exit(0);
