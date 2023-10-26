@@ -140,7 +140,7 @@ sub job_primary_inputs {
         my $last = $first + $merge - 1;
         $last = $nf - 1 if $nf - 1 < $last;
 
-        die "primary_inputs(): invalid index $index\n"
+        die "job_primary_inputs(): invalid index $index\n"
             unless $first <= $last; # no emtpy lists
 
         $res->{$k} = [ @$filelist[$first .. $last] ];
@@ -204,8 +204,8 @@ sub job_aux_inputs {
 sub job_inputs {
     my ($self, $index) = @_;
 
-    return { %{$self->primary_inputs($index)},
-                 %{$self->aux_inputs($index)} };
+    return { %{$self->job_primary_inputs($index)},
+                 %{$self->job_aux_inputs($index)} };
 }
 
 #================================================================
@@ -213,7 +213,7 @@ sub job_inputs {
 sub sequencer {
     my ($self, $index) = @_;
 
-    my $pin = $self->primary_inputs($index);
+    my $pin = $self->job_primary_inputs($index);
 
     if(%$pin) {
         my ($k, $files) = %$pin;
@@ -231,6 +231,58 @@ sub sequencer {
    }
 
     die "Error: get_sequencer(): unsupported JSON content\n";
+}
+
+#================================================================
+sub job_outputs {
+    my ($self, $index) = @_;
+
+    my $res = {};
+
+    if(my $out = $self->{'json'}->{'tbs'}->{'outfiles'}) {
+
+        my $seq = $self->sequencer($index);
+
+        keys %$out; # reset the iterator, just in case
+        while(my ($k, $v) = each(%$out)) {
+            my $f = Mu2eFilename->parse($v);
+            $f->sequencer($seq);
+            $res->{$k} = $f->basename();
+        }
+    }
+
+    return $res;
+}
+
+#================================================================
+sub job_event_settings {
+    my ($self, $index) = @_;
+
+    my $res = {};
+
+    if(my $evid = $self->{'json'}->{'tbs'}->{'event_id'}){
+        foreach my $k (keys %$evid) {
+            $res->{$k} = $evid->{$k};
+        }
+
+        $res->{'source.firstSubRun'} = $index;
+    }
+
+    return $res;
+}
+
+#================================================================
+sub job_seed {
+    my ($self, $index) = @_;
+
+    my $res = {};
+
+    my $key = $self->{'json'}->{'tbs'}->{'seed'};
+    if(defined $key) {
+        $res->{$key} = 1 + $index;
+    }
+
+    return $res;
 }
 
 #================================================================
@@ -268,17 +320,28 @@ whole:
     returns the content of the named file stored in jobpars.
 
 There are also methods that return information for a single job number
-$index defined by the par file:
+$index defined by the par file.  Any of the returned hashes may be empty,
+meaning this group of FCL setting is not needed.
 
     $jp->job_inputs($index);
     $jp->job_primary_inputs($index);
     $jp->job_aux_inputs($index);
-    Return a reference to a (possibly empty) hash.  The keys of the
-    hash are FCL keys for the inputs (one or zero for
-    primary_inputs(), arbitrary number for aux_inputs).  The values
-    are references to arrays that contain basenames of the input
-    files.  job_inputs() is a union of primary_inputs() and
-    aux_inputs().
+    Returns a reference to a hash.  The keys of the hash are FCL keys
+    for the inputs (one or zero for primary_inputs(), arbitrary number
+    for aux_inputs).  The values are references to arrays that contain
+    basenames of the input files.  job_inputs() is a union of
+    primary_inputs() and aux_inputs().
+
+    $jp->job_outputs($index);
+    Returns a reference to a hash mapping FCL keys to output file names.
+
+    $jp->job_event_settings($index)
+    Returns a reference to a hash.  The keys are FCL keys and values
+    are settings for the EmptyEvent source in the given job.
+
+    $jp->job_seed($index)
+    Returns a reference to a hash with zero or one entry.  A non-empty
+    result has FCL key and seed value for the job.
 
 =head1 AUTHOR
 

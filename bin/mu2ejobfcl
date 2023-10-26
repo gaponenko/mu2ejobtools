@@ -9,9 +9,6 @@ no warnings 'portable'; # otherwise complaints about exceeding 32-bit integers
 
 use Getopt::Long;
 use File::Basename;
-use Cwd 'abs_path';
-use Fcntl qw(:DEFAULT);
-use JSON;
 
 use Mu2eFilename;
 use Mu2eDSName;
@@ -116,8 +113,6 @@ die "Error: --index must be non-negative, got: $index\n" if $index < 0;
 
 my $jp = Mu2eJobPars->new($pfname);
 
-my $tbs = $jp->json->{'tbs'};
-
 $sp->initialize([$jp->input_datasets()], \%opt);
 
 #================================================================
@@ -134,13 +129,9 @@ my $fb =
     "# Code added by mu2ejobfcl:\n";
 
 #----------------------------------------------------------------
-if($tbs->{'event_id'}) {
-    my $evid = $tbs->{'event_id'};
-    while(my($k, $v) = each %$evid) {
-        $fb .= $k . ': ' . $v . ",\n";
-    }
-    $fb .= "source.firstSubRun: $index\n";
-}
+my $evid = $jp->job_event_settings($index);
+my @evset = map { $_ . ': ' . $evid->{$_} } keys %$evid;
+$fb .= join("\n", @evset) . "\n" if %$evid;
 
 #----------------------------------------------------------------
 my $inputs = $jp->job_inputs($index);
@@ -155,19 +146,17 @@ foreach my $k (keys  %$inputs) {
 }
 
 #----------------------------------------------------------------
-if(my $out = $tbs->{'outfiles'}) {
-    my $seq = $jp->sequencer($index);
-    keys %$out; # reset the iterator, just in case
-    while(my ($k, $v) = each(%$out)) {
-        my $f = Mu2eFilename->parse($v);
-        $f->sequencer($seq);
-        $fb .= "$k: ".  doubleQuote($f->basename()) . "\n";
-    }
+my $outputs = $jp->job_outputs($index);
+foreach my $k (keys  %$outputs) {
+    my $outfile = $outputs->{$k};
+    $fb .= "$k: ".  doubleQuote($outfile) . "\n";
 }
 
 #----------------------------------------------------------------
-if($tbs->{'seed'}) {
-    $fb .= $tbs->{'seed'} . ": " . (1+$index) . "\n";
+my $seed = $jp->job_seed($index);
+if(%$seed) {
+    my ($k, $v) = %$seed;
+    $fb .= "$k: $v\n";
 }
 
 #----------------------------------------------------------------
