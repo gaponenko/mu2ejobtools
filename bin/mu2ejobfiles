@@ -18,23 +18,37 @@ sub usage() {
     my $self = basename($0);
     return <<EOF
 Usage:
-        $self --jobpar cnf.tar \\
+        $self [-h|--help] \\
+              --jobpar cnf.tar \\
+              --index uint \\
              [--inspec spec.json] \\
-             [--index uint] \\
              [--stagedir /abs/path] \\
              {--inputs|--outputs|--prestage-spec|--cmdline}
 
-This script has 4 mutually exclusive modes of operation:
+This script provides information about input and outuput files of a
+job defined by the combination of the --jobpar and --index parameters.
+It has 4 mutually exclusive modes of operation:
 
-    --inputs   prints out basenames of input files for the given job
+    --inputs   prints out basenames of job input files
 
-    --outputs  prints out basenames of output files for the job
+    --outputs  prints out basenames of output files
 
     --prestage-spec  prints out a "prestage specification"
-        suitable for use with ifdh.
+        suitable for pre-staging input files with ifdh.
 
     --cmdline prints out command line switches for mu2ejobfcl that
         specify input protocols and file locations,
+
+The parameter --inspec is required for the --prestage-spec
+and --cmdline modes.  If any files are to be pre-staged,
+then --stagedir is also required.
+
+    --inspec A json file, normally passed from the grid submission
+        script, which specifies protocol and location for each of
+        the input datasets.
+
+    --stagedir  an absolute path to a local directory
+        for pre-staging input files
 
 There is also the
 
@@ -47,8 +61,8 @@ my %opt;
 
 GetOptions(\%opt,
            'jobpar=s',
-           'inspec=s',
            'index=i',
+           'inspec=s',
            'stagedir=s',
            'inputs',
            'outputs',
@@ -79,12 +93,13 @@ my ($mode) = @modes;
 my $pfname = $opt{'jobpar'};
 die "Error: --jobpar is required" unless defined $pfname;
 
+my $index = $opt{'index'};
+die "Error: --index is required\n" unless defined $index;
+
 my $jp = Mu2eJobPars->new($pfname);
 
 #================================================================
 if($mode eq 'inputs') {
-    my $index = $opt{'index'};
-    die "The --inputs mode requires --index\n" unless defined $index;
 
     my @files = sort map { @{$_} }
      values %{$jp->job_inputs($index)};
@@ -94,11 +109,6 @@ if($mode eq 'inputs') {
 
 #================================================================
 if($mode eq 'outputs') {
-    ...
-}
-
-#================================================================
-if($mode eq 'prestage-spec') {
     ...
 }
 
