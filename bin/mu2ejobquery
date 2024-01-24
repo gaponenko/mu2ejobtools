@@ -27,7 +27,7 @@ file cnf.tar   The possible queries are
 
     --njobs  The number of jobs in the set, zero means unlimited.
 
-    --datasets  List of all datasets used by the job set.
+    --input-datasets  List of all datasets used by the job set.
 
     --output-datasets  List of all datasets created by the job set.
 
@@ -56,7 +56,7 @@ my %opt;
 GetOptions(\%opt,
            'jobname',
            'njobs',
-           'datasets',
+           'input-datasets',
            'output-datasets',
            'codesize',
            'extract-code',
@@ -96,7 +96,7 @@ if( $opt{'njobs'} ) {
 }
 
 #================================================================
-if( $opt{'datasets'} ) {
+if( $opt{'input-datasets'} ) {
     my @dss = $jp->input_datasets();
     print join("\n", @dss), "\n";
 }
