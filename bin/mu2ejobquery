@@ -31,6 +31,13 @@ file cnf.tar   The possible queries are
 
     --output-datasets  List of all datasets created by the job set.
 
+    --output-files <dsname>[:listsize]
+        List of output files belonging to the given dataset.  For
+        unlimited job sets one must specify the desired number of
+        files to printout by appending a colon and the number to the
+        dataset name.  Such decoration is not allowed for finite job
+        sets, for which all output files will be printed.
+
     --codesize  The size of the compressed code tarball, in bytes.
         This will print 0 if the job par file does not contain code.
 
@@ -58,6 +65,7 @@ GetOptions(\%opt,
            'njobs',
            'input-datasets',
            'output-datasets',
+           'output-files=s',
            'codesize',
            'extract-code',
            'setup',
@@ -105,6 +113,32 @@ if( $opt{'input-datasets'} ) {
 if( $opt{'output-datasets'} ) {
     my @dss = $jp->output_datasets();
     print join("\n", @dss), "\n";
+}
+
+#================================================================
+if( my $spec = $opt{'output-files'} ) {
+    my ($dsname, $listsize) = split(/:/, $spec);
+
+    die "Error: please append list size specification to $dsname\n"
+        unless defined $listsize or $jp->njobs();
+
+    die "Error: --output-files list size specification"
+        . " is not allowed for finite job sets\n"
+        if defined $listsize and $jp->njobs();
+
+    $listsize = $jp->njobs unless defined $listsize;
+
+    die "Error: list size specification \"$listsize\" is not a number\n"
+        unless $listsize =~ m/^\d+$/;
+
+    die "Error: dataset $dsname is not produced by the job set\n"
+        unless scalar grep { $_ eq $dsname } $jp->output_datasets;
+
+    my $ds = Mu2eDSName->parse($dsname);
+
+    for(my $i = 0; $i < $listsize; ++$i) {
+        print $ds->file($jp->sequencer($i))->basename . "\n";
+    }
 }
 
 #================================================================
