@@ -37,7 +37,6 @@ sub new {
         dslist => [],
         protocols => [ @all_protocols ],
         dsproto => {}, # individual ds to protocol settings
-        locations => [ @all_protocols ],
         dsloc => {}, # individual ds to location settings
     }, $class;
 
@@ -80,7 +79,7 @@ sub location {
 
     my $loc = $lmap->{$dsname} // $self->{default_location};
 
-    croak "Mu2eInSpecs::locations(): no information for dataset \"$dsname\" and no default"
+    croak "Mu2eInSpecs::location(): no information for dataset \"$dsname\" and no default"
         unless defined $loc;
 
     return $loc;
