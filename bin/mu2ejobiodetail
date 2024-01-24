@@ -39,7 +39,8 @@ It has 4 mutually exclusive modes of operation:
         suitable for pre-staging input files with ifdh.
 
     --cmdline prints out command line switches for mu2ejobfcl that
-        specify input protocols and file locations,
+        specify input protocols and file locations.  You can omit
+        the --index specification when running in this mode.
 
 The parameter --inspec is required for the --prestage-spec
 and --cmdline modes.  If any files are to be pre-staged,
