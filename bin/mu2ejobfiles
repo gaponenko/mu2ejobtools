@@ -7,9 +7,11 @@ use strict;
 use warnings;
 use Getopt::Long;
 use File::Basename;
+use JSON;
 
 use lib dirname($0) . '/../perllib/';
 use Mu2eJobPars;
+use Mu2eInSpecs;
 
 use Data::Dumper; # for debugging
 
@@ -101,8 +103,7 @@ my $jp = Mu2eJobPars->new($pfname);
 #================================================================
 if($mode eq 'inputs') {
 
-    my @files = sort map { @{$_} }
-     values %{$jp->job_inputs($index)};
+    my @files = sort map { @{$_} } values %{$jp->job_inputs($index)};
 
     print join("\n", @files), "\n";
 }
@@ -113,6 +114,35 @@ if($mode eq 'outputs') {
     my @files = sort values %{$jp->job_outputs($index)};
 
     print join("\n", @files), "\n";
+}
+
+#================================================================
+if($mode eq 'prestage-spec') {
+
+    my $stagedir = $opt{'stagedir'};
+    die "Error: --stagedir is required for --prestage-spec\n"
+        unless defined $stagedir;
+
+    my $specfile = $opt{'inspec'};
+    die "Error: --inspec is required for --prestage-spec\n"
+        unless defined $specfile;
+
+    my $jsstr = do{local(@ARGV,$/)=$specfile; <> };
+    my $specmap = from_json($jsstr);
+
+    my @files = sort map { @{$_} } values %{$jp->job_inputs($index)};
+
+    foreach my $f (@files) {
+        my $fn = Mu2eFilename->parse($f);
+        my $dsstr = $fn->dataset->dsname;
+        my $dss = $specmap->{$dsstr};
+        die "Error: dataset $dsstr is missing in $specfile\n" unless defined $dss;
+        if($dss->[0] eq proto_ifdh) { # need to pre-stage
+            my $lfn = "$stagedir/$f";
+            my $rfn = $fn->abspathname($dss->[1]);
+            print $rfn, " ", $lfn, "\n";
+        }
+    }
 }
 
 #================================================================
