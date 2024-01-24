@@ -96,7 +96,8 @@ my $pfname = $opt{'jobpar'};
 die "Error: --jobpar is required" unless defined $pfname;
 
 my $index = $opt{'index'};
-die "Error: --index is required\n" unless defined $index;
+die "Error: --index is required\n" unless defined $index
+    or ($mode eq 'cmdline');
 
 my $jp = Mu2eJobPars->new($pfname);
 
@@ -147,7 +148,38 @@ if($mode eq 'prestage-spec') {
 
 #================================================================
 if($mode eq 'cmdline') {
-    ...
+
+    my $stagedir = $opt{'stagedir'};
+    die "Error: --stagedir is required for --cmdline\n"
+        unless defined $stagedir;
+
+    my $specfile = $opt{'inspec'};
+    die "Error: --inspec is required for --cmdline\n"
+        unless defined $specfile;
+
+    my $jsstr = do{local(@ARGV,$/)=$specfile; <> };
+    my $specmap = from_json($jsstr);
+
+    my $buf = "";
+    foreach my $dsstr ($jp->input_datasets()) {
+        my $dss = $specmap->{$dsstr};
+        die "Error: dataset $dsstr is missing in $specfile\n" unless defined $dss;
+
+        # if the user-specified protocol was ifdh, we should tell
+        # mu2ejobfcl to use the locally prestaged file
+
+        my $proto = $dss->[0];
+        my $location = $dss->[1];
+
+        if($proto eq proto_ifdh) {
+            $proto = proto_file;
+            $location = location_local . ":$stagedir";
+        }
+
+        $buf .= " --protocol $dsstr:$proto --location $dsstr:$location";
+    }
+
+    print $buf, "\n";
 }
 
 #================================================================
