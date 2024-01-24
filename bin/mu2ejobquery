@@ -29,6 +29,8 @@ file cnf.tar   The possible queries are
 
     --datasets  List of all datasets used by the job set.
 
+    --output-datasets  List of all datasets created by the job set.
+
     --codesize  The size of the compressed code tarball, in bytes.
         This will print 0 if the job par file does not contain code.
 
@@ -55,6 +57,7 @@ GetOptions(\%opt,
            'jobname',
            'njobs',
            'datasets',
+           'output-datasets',
            'codesize',
            'extract-code',
            'setup',
@@ -95,6 +98,12 @@ if( $opt{'njobs'} ) {
 #================================================================
 if( $opt{'datasets'} ) {
     my @dss = $jp->input_datasets();
+    print join("\n", @dss), "\n";
+}
+
+#================================================================
+if( $opt{'output-datasets'} ) {
+    my @dss = $jp->output_datasets();
     print join("\n", @dss), "\n";
 }
 

@@ -141,6 +141,24 @@ sub input_datasets {
 }
 
 #================================================================
+sub output_datasets {
+    my ($self) = @_;
+
+    my $tbs = $self->json->{'tbs'}
+    or croak "Error: njobs(): could not extract tbs"
+        . " from the json for file ".$self->parfilename."\n";
+
+    my @dslist;
+    if(my $out = $tbs->{'outfiles'}) {
+        push @dslist,
+            map { my $f = Mu2eFilename->parse($_);
+                  $f->dataset->dsname; }
+            values %$out;
+    }
+    return @dslist;
+}
+
+#================================================================
 sub codesize {
     my ($self) = @_;
 
@@ -382,6 +400,9 @@ not to individual jobs
     Returns a list of all datasets used by the job set.  A dataset
     gets on the list if there is a file from that dataset used either
     as primary or secondary input for any of the jobs.
+
+    $jp->output_datasets()
+    Returns a list of all datasets created by the job set.
 
     $jp->json()
     Returns the toplevel JSON object in the file
