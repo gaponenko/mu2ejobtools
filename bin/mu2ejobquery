@@ -94,7 +94,7 @@ if( $opt{'njobs'} ) {
 
 #================================================================
 if( $opt{'datasets'} ) {
-    my @dss = $jp->get_datasets();
+    my @dss = $jp->input_datasets();
     print "@dss\n";
 }
 
