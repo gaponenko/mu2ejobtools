@@ -298,10 +298,10 @@ sub _parse_useropts {
 sub initialize {
     my ($self, $ds, $opt) = @_;
 
-    croak "Mu2eInSpecs->init(): the second arg must be a reference to cmdline %opts"
+    croak "Mu2eInSpecs->initialize(): the second arg must be a reference to cmdline %opts"
         unless ref($opt) eq 'HASH';
 
-    croak "Mu2eInSpecs->init(): the first arg must be a reference to a list of datasets"
+    croak "Mu2eInSpecs->initialize(): the first arg must be a reference to a list of datasets"
         unless ref($ds) eq 'ARRAY';
 
     $self->_define_datasets(@$ds);
