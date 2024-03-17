@@ -9,6 +9,11 @@ use parent qw(Exporter);
 use strict;
 use Carp;
 
+# top level key name in json files read and written by mu2ejobsub and
+# utilities in this package
+use constant json_key_jobset => 'jobs';
+use constant json_key_inspec => 'inspec';
+
 #================================================================
 sub doubleQuote {
     my @res = map {'"'.$_.'"' } @_;
@@ -23,6 +28,8 @@ sub doubleQuote {
 our $VERSION = '1.00';
 
 our @EXPORT   = qw(
+    json_key_jobset
+    json_key_inspec
     doubleQuote
     );
 
