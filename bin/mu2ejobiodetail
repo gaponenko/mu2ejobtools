@@ -9,6 +9,8 @@ use Getopt::Long;
 use File::Basename;
 use JSON;
 
+use Mu2eFilename;
+
 use lib dirname($0) . '/../perllib/';
 use Mu2eJobPars;
 use Mu2eInSpecs;
@@ -26,15 +28,17 @@ Usage:
               --index uint \\
              [--inspec spec.json] \\
              [--stagedir /abs/path] \\
-             {--inputs|--outputs|--prestage-spec|--cmdline}
+             RUNNING_MODE
 
 This script provides information about input and outuput files of a
 job defined by the combination of the --jobpar and --index parameters.
-It has 4 mutually exclusive modes of operation:
+The RUNNING_MODE can be one of
 
     --inputs   prints out basenames of job input files
 
     --outputs  prints out basenames of output files
+
+    --logfile  prints out the basename of the job log file
 
     --prestage-spec  prints out a "prestage specification"
         suitable for pre-staging input files with ifdh.
@@ -70,6 +74,7 @@ GetOptions(\%opt,
            'stagedir=s',
            'inputs',
            'outputs',
+           'logfile',
            'prestage-spec',
            'cmdline',
            'help',
@@ -82,7 +87,7 @@ if($opt{'help'}) {
 }
 
 my $ismode = sub { my ($k) = @_; return  scalar grep { $_ eq $k }
-                   qw/inputs outputs prestage-spec cmdline/;  };
+                   qw/inputs outputs logfile prestage-spec cmdline/;  };
 
 my @modes = grep { $ismode->($_) } keys %opt;
 
@@ -117,6 +122,18 @@ if($mode eq 'outputs') {
     my @files = sort values %{$jp->job_outputs($index)};
 
     print join("\n", @files), "\n";
+}
+
+#================================================================
+if($mode eq 'logfile') {
+
+    my $jn = $jp->jobname();
+    my $lf = Mu2eFilename->parse($jn);
+    $lf->tier('log');
+    $lf->extension('log');
+    $lf->sequencer($jp->sequencer($index));
+
+    print $lf->basename, "\n";
 }
 
 #================================================================
