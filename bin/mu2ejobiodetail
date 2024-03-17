@@ -12,6 +12,7 @@ use JSON;
 use lib dirname($0) . '/../perllib/';
 use Mu2eJobPars;
 use Mu2eInSpecs;
+use mu2ejobtools;
 
 use Data::Dumper; # for debugging
 
@@ -130,7 +131,10 @@ if($mode eq 'prestage-spec') {
         unless defined $specfile;
 
     my $jsstr = do{local(@ARGV,$/)=$specfile; <> };
-    my $specmap = from_json($jsstr);
+    my $jstop = from_json($jsstr);
+    my $specmap = $jstop->{ json_key_inspec() };
+    die "Error: no inspec information in file $specfile\n"
+        unless defined $specmap and (ref($specmap) eq ref({}));
 
     my @files = sort map { @{$_} } values %{$jp->job_inputs($index)};
 
@@ -159,7 +163,10 @@ if($mode eq 'cmdline') {
         unless defined $specfile;
 
     my $jsstr = do{local(@ARGV,$/)=$specfile; <> };
-    my $specmap = from_json($jsstr);
+    my $jstop = from_json($jsstr);
+    my $specmap = $jstop->{ json_key_inspec() };
+    die "Error: no inspec information in file $specfile\n"
+        unless defined $specmap and (ref($specmap) eq ref({}));
 
     my $buf = "";
     foreach my $dsstr ($jp->input_datasets()) {
