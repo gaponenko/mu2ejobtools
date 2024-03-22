@@ -178,6 +178,7 @@ EOF
 . <<EOF
 
 
+  (where 'disk' referes to the PNFS 'persistent' location),
   or an absolute path to a directory where all dataset files have been placed,
   prefixed with the $lloc: literal string:
 
