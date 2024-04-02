@@ -50,7 +50,7 @@ sub usage() {
 Usage:
         $self \\
          {--setup=<cvmfs-script-to-source.sh>|--code=/path/to/tar-file} \\
-         {--jobdesc=<string>|--auto-jobdesc[=suffix]} \\
+         {--description=<string>|--auto-description[=suffix]} \\
           --dsconf=<string> \\
          [--dsowner=<string>] \\
          [--override-output-description] \\
@@ -62,14 +62,14 @@ Usage:
 
 The mu2ejobdef script packs parameters that define a set of mu2e
 Offline grid jobs into a cnf.tar file.  The name of the output file,
-in the current directory, will be constructed using --jobdesc (for the
+in the current directory, will be constructed using --description (for the
 description field), --dsconf, and other pieces of information
 according to the Mu2e convention, see
 https://mu2ewiki.fnal.gov/wiki/FileNames
 The sequencer field for job names is not meaningful and
 is always set to "0".
 
-The --auto-jobdesc option can be used only with --inputs and sets
+The --auto-description option can be used only with --inputs and sets
 the description field of our cnf.tar file to that of the --inputs;
 all input files in that case must have the same description.  If a
 suffix is provided, the final description string will be the
@@ -78,8 +78,7 @@ suffix.
 
 Exactly one of --setup or --code must be provided to
 specify the version of Mu2e software to use.
-The --setup argument must point to a setup script
-on /cvmfs, like
+The --setup argument must point to a setup script on /cvmfs, like
 /cvmfs/mu2e.opensciencegrid.org/Musings/SimJob/MDC2020w/setup.sh
 The --code option must point to a code tarball, which is expected to
 have a $tarset file.  The setup file will be sourced on grid
@@ -96,10 +95,10 @@ dsowner is mu2e.)
 
 The --override-output-description option sets the description field of all
 grid job outputs to the same string as used to name the cnf.tar file
-defining the jobs, as derived from either the --jobdesc or
---auto-jobdesc option.  This can only work for a subset of fcl configs
+defining the jobs, as derived from either the --description or
+--auto-description option.  This can only work for a subset of fcl configs
 where it does not lead to duplicate file names in different output
-streams.  By default output file descriptions set in the fcl file
+streams.  By default output file descriptions defined in the fcl file
 are left alone.
 
 The content of the given template-fcl-file will be copied if the
@@ -261,8 +260,8 @@ my %opt = ('dsowner' =>  $defaultUser,
 GetOptions(\%opt,
            'setup=s',
            'code=s',
-           'jobdesc=s',
-           'auto-jobdesc:s',
+           'description=s',
+           'auto-description:s',
            'dsconf=s',
            'dsowner=s',
            'override-output-description',
@@ -357,13 +356,13 @@ if($srctype eq 'EmptyEvent') {
             unless defined $opt{$k};
     }
 
-    foreach my $k (@fileInputsArgs, 'auto-jobdesc') {
+    foreach my $k (@fileInputsArgs, 'auto-description') {
         die "Error: --$k is not compatible with fcl files that use source type $srctype.  Try the --help option.\n"
             if defined $opt{$k};
     }
 
-    die "Error: --jobdesc must be specified for jobs with the EmptyEvent source type.\n"
-        unless defined $opt{'jobdesc'};
+    die "Error: --description must be specified for jobs with the EmptyEvent source type.\n"
+        unless defined $opt{'description'};
 
     $tbs{'event_id'} = {
         'source.firstRun' => $opt{'run-number'},
@@ -417,20 +416,20 @@ checkFilenameComponent(\%opt, ['dsconf', 'dsowner']);
 my $dsconf = $opt{'dsconf'};
 my $dsowner = $opt{'dsowner'};
 
-if(defined $opt{'auto-jobdesc'}) {
-    if(defined $opt{'jobdesc'}) {
-        die "Error: --jobdesc and --auto-jobdesc are mutually exclusive.\n";
+if(defined $opt{'auto-description'}) {
+    if(defined $opt{'description'}) {
+        die "Error: --description and --auto-description are mutually exclusive.\n";
     }
 }
 else {
-    die "Error: either --jobdesc or --auto-jobdesc must be specified\n"
-        unless defined $opt{'jobdesc'};
+    die "Error: either --description or --auto-description must be specified\n"
+        unless defined $opt{'description'};
 
-    checkFilenameComponent(\%opt, ['jobdesc']);
+    checkFilenameComponent(\%opt, ['description']);
 }
 
-# Since we passed the checks above we should be able to set jobdesc one way or another
-my $jobdesc =  $opt{'jobdesc'} // extractDescription(\@infiles) . $opt{'auto-jobdesc'};
+# Since we passed the checks above we should be able to set description one way or another
+my $description =  $opt{'description'} // extractDescription(\@infiles) . $opt{'auto-description'};
 
 #================================================================
 # parse the last bit of cmdline options so we can stop on syntax errors
@@ -492,7 +491,7 @@ my $jn = Mu2eFilename->new;
 $jn->tier('cnf');
 $jn->owner($dsowner);
 $jn->configuration($dsconf);
-$jn->description($jobdesc);
+$jn->description($description);
 $jn->sequencer('0');
 $jn->extension('tar');
 my $jobname = $jn->basename;
@@ -517,7 +516,7 @@ if($ntsoutstr ne '') {
 
         die "Bad histo file name $ntsoutstr: expect data tier nts\n" unless $ntsfn->tier eq 'nts';
         $ntsfn->owner($dsowner);
-        $ntsfn->description($jobdesc) if $override_output_desc;
+        $ntsfn->description($description) if $override_output_desc;
         $ntsfn->configuration($dsconf);
         # the sequencer to be set by the grid process
         die "Bad histo file name $ntsoutstr: expect extension .root\n" unless $ntsfn->extension eq 'root';
@@ -567,7 +566,7 @@ foreach my $mod (@active_outmods) {
 
     # there are multiple valid tiers, do not check
     $fn->owner($dsowner);
-    $fn->description($jobdesc) if $override_output_desc;
+    $fn->description($description) if $override_output_desc;
     $fn->configuration($dsconf);
     # the sequencer to be set by the grid process
     die "Bad output file name $outfile: expect extension .art\n" unless $fn->extension eq 'art';
