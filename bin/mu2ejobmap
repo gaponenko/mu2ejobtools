@@ -21,7 +21,7 @@ sub usage() {
 Usage:
         $self [-h|--help] \\
               --clusterpars gcp.json \\
-              --process uint \\
+              --process uint
 
 This script is meant to be used by a grid worker process.  It maps the
 grid process number in a cluster (e.g. the condor PROCESS environment
