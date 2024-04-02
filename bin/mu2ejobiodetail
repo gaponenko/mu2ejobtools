@@ -24,14 +24,14 @@ sub usage() {
     return <<EOF
 Usage:
         $self [-h|--help] \\
-              --jobpar cnf.tar \\
+              --jobdef cnf.tar \\
               --index uint \\
              [--inspec spec.json] \\
              [--stagedir /abs/path] \\
              RUNNING_MODE
 
 This script provides information about input and outuput files of a
-job defined by the combination of the --jobpar and --index parameters.
+job defined by the combination of the --jobdef and --index parameters.
 The RUNNING_MODE can be one of
 
     --inputs   prints out basenames of job input files
@@ -68,7 +68,7 @@ EOF
 my %opt;
 
 GetOptions(\%opt,
-           'jobpar=s',
+           'jobdef=s',
            'index=i',
            'inspec=s',
            'stagedir=s',
@@ -99,8 +99,8 @@ die "Error: a running mode must be specified\n"
 
 my ($mode) = @modes;
 
-my $pfname = $opt{'jobpar'};
-die "Error: --jobpar is required" unless defined $pfname;
+my $pfname = $opt{'jobdef'};
+die "Error: --jobdef is required" unless defined $pfname;
 
 my $index = $opt{'index'};
 die "Error: --index is required\n" unless defined $index

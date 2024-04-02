@@ -68,13 +68,13 @@ sub usage() {
     return <<EOF
 Usage:
         $self \\
-           --parfile=cnf.tar \\
+           --jobdef=cnf.tar \\
            --index=<uint> \\
 $inspec_opts
            [-h|--help]
 
 This script prints out fcl config for a job with the given index in
-the set of jobs defined by the parfile.  If the job needs any inputs,
+the set of jobs defined by the jobdef.  If the job needs any inputs,
 their location and access protocol must be specified using the
 following options:
 
@@ -87,7 +87,7 @@ EOF
 my %opt;
 
 GetOptions(\%opt,
-           'parfile=s',
+           'jobdef=s',
            'index=i',
            $sp->option_defs(),
            'help',
@@ -102,8 +102,8 @@ if($opt{'help'}) {
 #================================================================
 # Check the fundamentals
 
-die "Error: --parfile is required\n" unless $opt{'parfile'};
-my $pfname = $opt{'parfile'};
+die "Error: --jobdef is required\n" unless $opt{'jobdef'};
+my $pfname = $opt{'jobdef'};
 die "Error: $pfname is not a file\n" unless -f $pfname;
 die "Error: file $pfname is not readable\n" unless -r $pfname;
 
