@@ -113,7 +113,7 @@ if($mode eq 'inputs') {
 
     my @files = sort map { @{$_} } values %{$jp->job_inputs($index)};
 
-    print join("\n", @files), "\n";
+    print map { $_ . "\n" } @files;
 }
 
 #================================================================
@@ -121,7 +121,7 @@ if($mode eq 'outputs') {
 
     my @files = sort values %{$jp->job_outputs($index)};
 
-    print join("\n", @files), "\n";
+    print map { $_ . "\n" } @files;
 }
 
 #================================================================

@@ -106,13 +106,13 @@ if( $opt{'njobs'} ) {
 #================================================================
 if( $opt{'input-datasets'} ) {
     my @dss = $jp->input_datasets();
-    print join("\n", @dss), "\n";
+    print map { $_ . "\n" } @dss;
 }
 
 #================================================================
 if( $opt{'output-datasets'} ) {
     my @dss = $jp->output_datasets();
-    print join("\n", @dss), "\n";
+    print map { $_ . "\n" } @dss;
 }
 
 #================================================================
