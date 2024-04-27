@@ -244,6 +244,47 @@ sub assert_lfn($) {
     Mu2eFilename->parse($filename); # croaks on format errors
 }
 
+sub validateOptionsForSourceType {
+    my ($srctype, $opt) = @_;
+
+    use Class::Struct SrcOpts => [ required => '@', allowed => '@' ];
+
+    my $fileInputsDef = SrcOpts->new(equired => ['inputs', 'merge-factor'],
+                                     allowed => [ 'description', 'auto-description' ]);
+
+    my %defs = (
+        'EmptyEvent' => SrcOpts->new(required => [ 'run-number', 'events-per-job', 'description' ],
+                                     allowed => []
+        ),
+
+        'RootInput' => $fileInputsDef,
+        'FromCorsikaBinary' => $fileInputsDef,
+        'FromSTMTestBeamData' => $fileInputsDef,
+        );
+
+    my @allOpts = map { @{$_->required}, @{$_->allowed} } values %defs;
+
+    # remove duplicates
+    @allOpts = keys { map { $_ => 1 } @allOpts };
+
+    my $ss = $defs{$srctype};
+
+    # verify that all the required options are present
+    foreach my $k (@{$ss->required}) {
+        die "Error: --$k must be specified and nonempty for fcl files that use source type $srctype.  Try the --help option.\n"
+            unless defined $opt->{$k};
+    }
+
+    # veto incompatible options
+    foreach my $k (@allOpts) {
+        next if grep /^$k$/, @{$ss->allowed};
+        next if grep /^$k$/, @{$ss->required};
+        die "Error: --$k is not compatible with fcl files that use source type $srctype.  Try the --help option.\n"
+            if defined $opt->{$k};
+    }
+}
+
+
 #================================================================
 # execution starts here
 
@@ -338,31 +379,15 @@ if($?) {
 chomp $srctype;
 print "Got srctype = $srctype\n" if $verbose;
 
-# The set of required args depends on the fcl: e.g g4s1 needs run
-# numbers but g4s2 does not, and can not use them.
-my @emptySourceArgs = ('run-number', 'events-per-job');
-my @fileInputsArgs = ('inputs', 'merge-factor');
-
 my @infiles;
 
 # table of parameters to be set on the grid node
 my %tbs;
 
+validateOptionsForSourceType($srctype, \%opt);
+
 #----------------------------------------------------------------
 if($srctype eq 'EmptyEvent') {
-
-    foreach my $k (@emptySourceArgs) {
-        die "Error: --$k must be specified and nonempty for fcl files that use source type $srctype.  Try the --help option.\n"
-            unless defined $opt{$k};
-    }
-
-    foreach my $k (@fileInputsArgs, 'auto-description') {
-        die "Error: --$k is not compatible with fcl files that use source type $srctype.  Try the --help option.\n"
-            if defined $opt{$k};
-    }
-
-    die "Error: --description must be specified for jobs with the EmptyEvent source type.\n"
-        unless defined $opt{'description'};
 
     $tbs{'event_id'} = {
         'source.firstRun' => $opt{'run-number'},
@@ -372,16 +397,6 @@ if($srctype eq 'EmptyEvent') {
 }
 #----------------------------------------------------------------
 elsif(($srctype eq 'RootInput') or ($srctype eq 'FromCorsikaBinary') or ($srctype eq 'FromSTMTestBeamData')) {
-
-    foreach my $k (@fileInputsArgs) {
-        die "Error: --$k must be specified and nonempty for fcl files that use source type $srctype.  Try the --help option.\n"
-            unless defined $opt{$k};
-    }
-    foreach my $k (@emptySourceArgs) {
-        die "Error: --$k is not compatible with fcl files that use source type $srctype.  Try the --help option.\n"
-            if defined $opt{$k};
-    }
-
     my $merge = $opt{'merge-factor'};
     die "Error: --merge-factor must be a positive integer. Got: $merge\n" unless $merge > 0;
 
