@@ -589,6 +589,10 @@ my @mixinputkeys;
 my %trigmodules;
 my @trigpaths = `fhicl-get --sequence-of string physics.trigger_paths $templateresolved 2>/dev/null`;
 chomp @trigpaths;
+
+# delete trigger bit definitions that may be prepended to trigger path names
+@trigpaths = map { s/^.*://; $_ } @trigpaths;
+
 foreach my $tp (@trigpaths) {
     next if $tp eq '@nil';
     print "working on trigger path $tp\n" if $verbose;
