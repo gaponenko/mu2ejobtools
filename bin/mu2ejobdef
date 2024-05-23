@@ -331,6 +331,18 @@ my $templateresolved = $embed ?
 print "Resolved template file name = $templateresolved\n" if $verbose;
 
 #----------------------------------------------------------------
+# The logic of the checks rely on trigger_paths and end_paths being
+# defined.  If something is missing, stop here.  (Or something may
+# fail later with a confusing error message.)
+
+my @topkeys  = `fhicl-get --names-in  physics $templateresolved 2>/dev/null`;
+chomp @topkeys;
+foreach my $i ('trigger_paths', 'end_paths') {
+    grep /^$i$/, @topkeys
+        or die "Error: please define physics.$i in the fcl file.\n";
+}
+
+#----------------------------------------------------------------
 my $srctype = `fhicl-get --atom-as string source.module_type $templateresolved 2>/dev/null`;
 if($?) {
     die "Error running fhicl-get to determine source.module_type.\n";
