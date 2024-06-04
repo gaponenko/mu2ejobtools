@@ -462,55 +462,63 @@ my $description =  $opt{'description'} // extractDescription(\@infiles) . $opt{'
 # parse the last bit of cmdline options so we can stop on syntax errors
 # before going through the time consuming fcl file analysis
 
-my %auxdupcheck;
+sub parseAuxSpecs {
+    my ($optname, $optlist) = @_;
 
-my @auxin_specs;
-foreach my $str (@auxinputStrSpecs) {
+    my %auxdupcheck;
 
-    my ($nfstr, $var, $listfile, $extra) = split(/:/, $str);
+    my @auxin_specs;
+    foreach my $str (@{$optlist}) {
 
-    die "Error in an --auxin specification: more than two ':'-s in \"$str\"\n" if defined $extra;
-    die "Error in an --auxin specification: less than two ':'-s in \"$str\"\n" unless defined $listfile;
+        my ($nfstr, $var, $listfile, $extra) = split(/:/, $str);
 
-    my $numFiles;
-    if($nfstr eq 'all') {
-        $numFiles = 0;
+        die "Error in an --$optname specification: more than two ':'-s in \"$str\"\n" if defined $extra;
+        die "Error in an --$optname specification: less than two ':'-s in \"$str\"\n" unless defined $listfile;
+
+        my $numFiles;
+        if($nfstr eq 'all') {
+            $numFiles = 0;
+        }
+        elsif($nfstr =~ /^\d+$/) {
+            $numFiles = 0+$nfstr;
+            die "$numFiles = 0 is not valid in --$optname spec \"$str\".  Do you mean 'all'?\n" unless $numFiles;
+        }
+        else {
+            die "Invalid numFiles in the --$optname spec $str\n";
+        }
+
+        die "Error: re-definition of --$optname for key $var on the command line\n" if $auxdupcheck{$var};
+        $auxdupcheck{$var} = 1;
+
+        my @auxfiles;
+        open(my $fh, '<', $listfile) or die "Can not open for reading file \"$listfile\": $!\n";
+        while(my $line = <$fh>) {
+            chomp($line);
+            die "Error in file $listfile: the line is empty or contains white spaces or other non-printable characters: \"$line\"\n"
+                unless $line =~ /^\p{IsGraph}+$/;
+
+            next if $line =~ /^.*#/; # skip comments
+            next if $line eq ''; # and whitespace-only lines
+
+            # Check that inputs are given as logical mu2e filenames
+            assert_lfn($line);
+
+            push @auxfiles, $line;
+        }
+
+        my $spec = Mu2eAuxInSpec->new(
+            numFilesPerJob=>$numFiles,
+            fclkey=>$var,
+            filenames=>\@auxfiles,
+            );
+
+        push @auxin_specs, $spec;
     }
-    elsif($nfstr =~ /^\d+$/) {
-        $numFiles = 0+$nfstr;
-        die "$numFiles = 0 is not valid in --auxin spec \"$str\".  Do you mean 'all'?\n" unless $numFiles;
-    }
-    else {
-        die "Invalid numFiles in the --auxin spec $str\n";
-    }
 
-    die "Error: re-definition of --auxinput for key $var on the command line\n" if $auxdupcheck{$var};
-    $auxdupcheck{$var} = 1;
-
-    my @auxfiles;
-    open(my $fh, '<', $listfile) or die "Can not open for reading file \"$listfile\": $!\n";
-    while(my $line = <$fh>) {
-        chomp($line);
-        die "Error in file $listfile: the line is empty or contains white spaces or other non-printable characters: \"$line\"\n"
-            unless $line =~ /^\p{IsGraph}+$/;
-
-        next if $line =~ /^.*#/; # skip comments
-        next if $line eq ''; # and whitespace-only lines
-
-        # Check that inputs are given as logical mu2e filenames
-        assert_lfn($line);
-
-        push @auxfiles, $line;
-    }
-
-    my $spec = Mu2eAuxInSpec->new(
-        numFilesPerJob=>$numFiles,
-        fclkey=>$var,
-        filenames=>\@auxfiles,
-        );
-
-    push @auxin_specs, $spec;
+    return @auxin_specs;
 }
+
+my @auxin_specs = parseAuxSpecs('auxin', \@auxinputStrSpecs);
 
 #================================================================
 # Define the full job name
