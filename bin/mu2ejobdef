@@ -244,6 +244,81 @@ sub assert_lfn($) {
     Mu2eFilename->parse($filename); # croaks on format errors
 }
 
+#================================================================
+sub parseAuxSpecs {
+    my ($optname, $optlist) = @_;
+
+    my %auxdupcheck;
+
+    my @auxin_specs;
+    foreach my $str (@{$optlist}) {
+
+        my ($nfstr, $var, $listfile, $extra) = split(/:/, $str);
+
+        die "Error in an --$optname specification: more than two ':'-s in \"$str\"\n" if defined $extra;
+        die "Error in an --$optname specification: less than two ':'-s in \"$str\"\n" unless defined $listfile;
+
+        my $numFiles;
+        if($nfstr eq 'all') {
+            $numFiles = 0;
+        }
+        elsif($nfstr =~ /^\d+$/) {
+            $numFiles = 0+$nfstr;
+            die "$numFiles = 0 is not valid in --$optname spec \"$str\".  Do you mean 'all'?\n" unless $numFiles;
+        }
+        else {
+            die "Invalid numFiles in the --$optname spec $str\n";
+        }
+
+        die "Error: re-definition of --$optname for key $var on the command line\n" if $auxdupcheck{$var};
+        $auxdupcheck{$var} = 1;
+
+        my @auxfiles;
+        open(my $fh, '<', $listfile) or die "Can not open for reading file \"$listfile\": $!\n";
+        while(my $line = <$fh>) {
+            chomp($line);
+            die "Error in file $listfile: the line is empty or contains white spaces or other non-printable characters: \"$line\"\n"
+                unless $line =~ /^\p{IsGraph}+$/;
+
+            next if $line =~ /^.*#/; # skip comments
+            next if $line eq ''; # and whitespace-only lines
+
+            # Check that inputs are given as logical mu2e filenames
+            assert_lfn($line);
+
+            push @auxfiles, $line;
+        }
+
+        my $spec = Mu2eAuxInSpec->new(
+            numFilesPerJob=>$numFiles,
+            fclkey=>$var,
+            filenames=>\@auxfiles,
+            );
+
+        push @auxin_specs, $spec;
+    }
+
+    return @auxin_specs;
+}
+
+#================================================================
+sub validateAuxKeys {
+    my ($keys, $specs) = @_;
+
+    my @speckeys = map { $_->fclkey } @{$specs};
+
+    foreach my $k (@{$keys}) {
+        grep /^$k$/, @speckeys
+            or die "Error: The FCL config requires auxiliary inputs for $k that are not provided\n";
+    }
+
+    foreach my $k (@speckeys) {
+        grep /^$k$/, @{$keys}
+            or die "Error: key $k in an --auxinput option does not have a correspondence in the FCL config\n";
+    }
+}
+
+#================================================================
 sub validateOptionsForSourceType {
     my ($srctype, $opt) = @_;
 
@@ -462,62 +537,6 @@ my $description =  $opt{'description'} // extractDescription(\@infiles) . $opt{'
 # parse the last bit of cmdline options so we can stop on syntax errors
 # before going through the time consuming fcl file analysis
 
-sub parseAuxSpecs {
-    my ($optname, $optlist) = @_;
-
-    my %auxdupcheck;
-
-    my @auxin_specs;
-    foreach my $str (@{$optlist}) {
-
-        my ($nfstr, $var, $listfile, $extra) = split(/:/, $str);
-
-        die "Error in an --$optname specification: more than two ':'-s in \"$str\"\n" if defined $extra;
-        die "Error in an --$optname specification: less than two ':'-s in \"$str\"\n" unless defined $listfile;
-
-        my $numFiles;
-        if($nfstr eq 'all') {
-            $numFiles = 0;
-        }
-        elsif($nfstr =~ /^\d+$/) {
-            $numFiles = 0+$nfstr;
-            die "$numFiles = 0 is not valid in --$optname spec \"$str\".  Do you mean 'all'?\n" unless $numFiles;
-        }
-        else {
-            die "Invalid numFiles in the --$optname spec $str\n";
-        }
-
-        die "Error: re-definition of --$optname for key $var on the command line\n" if $auxdupcheck{$var};
-        $auxdupcheck{$var} = 1;
-
-        my @auxfiles;
-        open(my $fh, '<', $listfile) or die "Can not open for reading file \"$listfile\": $!\n";
-        while(my $line = <$fh>) {
-            chomp($line);
-            die "Error in file $listfile: the line is empty or contains white spaces or other non-printable characters: \"$line\"\n"
-                unless $line =~ /^\p{IsGraph}+$/;
-
-            next if $line =~ /^.*#/; # skip comments
-            next if $line eq ''; # and whitespace-only lines
-
-            # Check that inputs are given as logical mu2e filenames
-            assert_lfn($line);
-
-            push @auxfiles, $line;
-        }
-
-        my $spec = Mu2eAuxInSpec->new(
-            numFilesPerJob=>$numFiles,
-            fclkey=>$var,
-            filenames=>\@auxfiles,
-            );
-
-        push @auxin_specs, $spec;
-    }
-
-    return @auxin_specs;
-}
-
 my @auxin_specs = parseAuxSpecs('auxin', \@auxinputStrSpecs);
 
 #================================================================
@@ -659,22 +678,6 @@ foreach my $mod (@all_filters) {
 }
 
 # Assert a one-to-one correspondence between @mixinputkeys and @auxin_specs
-sub validateAuxKeys {
-    my ($keys, $specs) = @_;
-
-    my @speckeys = map { $_->fclkey } @{$specs};
-
-    foreach my $k (@{$keys}) {
-        grep /^$k$/, @speckeys
-            or die "Error: The FCL config requires auxiliary inputs for $k that are not provided\n";
-    }
-
-    foreach my $k (@speckeys) {
-        grep /^$k$/, @{$keys}
-            or die "Error: key $k in an --auxinput option does not have a correspondence in the FCL config\n";
-    }
-}
-
 validateAuxKeys(\@mixinputkeys, \@auxin_specs);
 
 # auxin info to put into json
