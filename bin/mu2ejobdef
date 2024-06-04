@@ -451,7 +451,8 @@ print "Resolved template file name = $templateresolved\n" if $verbose;
 # defined.  If something is missing, stop here.  (Or something may
 # fail later with a confusing error message.)
 
-my @topkeys  = `fhicl-get --names-in  physics $templateresolved 2>/dev/null`;
+my @topkeys  = `fhicl-get --names-in  physics $templateresolved`;
+die "Error processing $templateresolved\n" if $?;
 chomp @topkeys;
 foreach my $i ('trigger_paths', 'end_paths') {
     grep /^$i$/, @topkeys
