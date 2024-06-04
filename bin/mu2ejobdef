@@ -303,18 +303,18 @@ sub parseAuxSpecs {
 
 #================================================================
 sub validateAuxKeys {
-    my ($keys, $specs) = @_;
+    my ($optname, $keys, $specs) = @_;
 
     my @speckeys = map { $_->fclkey } @{$specs};
 
     foreach my $k (@{$keys}) {
         grep /^$k$/, @speckeys
-            or die "Error: The FCL config requires auxiliary inputs for $k that are not provided\n";
+            or die "Error: The FCL config requires --$optname for $k that is not provided\n";
     }
 
     foreach my $k (@speckeys) {
         grep /^$k$/, @{$keys}
-            or die "Error: key $k in an --auxinput option does not have a correspondence in the FCL config\n";
+            or die "Error: key $k in the --$optname option does not have a correspondence in the FCL config\n";
     }
 }
 
@@ -537,7 +537,7 @@ my $description =  $opt{'description'} // extractDescription(\@infiles) . $opt{'
 # parse the last bit of cmdline options so we can stop on syntax errors
 # before going through the time consuming fcl file analysis
 
-my @auxin_specs = parseAuxSpecs('auxin', \@auxinputStrSpecs);
+my @auxin_specs = parseAuxSpecs('auxinput', \@auxinputStrSpecs);
 
 #================================================================
 # Define the full job name
@@ -678,7 +678,7 @@ foreach my $mod (@all_filters) {
 }
 
 # Assert a one-to-one correspondence between @mixinputkeys and @auxin_specs
-validateAuxKeys(\@mixinputkeys, \@auxin_specs);
+validateAuxKeys('auxinput', \@mixinputkeys, \@auxin_specs);
 
 # auxin info to put into json
 my %auxintable;
