@@ -659,17 +659,23 @@ foreach my $mod (@all_filters) {
 }
 
 # Assert a one-to-one correspondence between @mixinputkeys and @auxin_specs
-my @auxkeys = map { $_->fclkey } @auxin_specs;
+sub validateAuxKeys {
+    my ($keys, $specs) = @_;
 
-foreach my $k (@mixinputkeys) {
-    grep /^$k$/, @auxkeys
-        or die "Error: The FCL config requires auxiliary inputs for $k that are not provided\n";
+    my @speckeys = map { $_->fclkey } @{$specs};
+
+    foreach my $k (@{$keys}) {
+        grep /^$k$/, @speckeys
+            or die "Error: The FCL config requires auxiliary inputs for $k that are not provided\n";
+    }
+
+    foreach my $k (@speckeys) {
+        grep /^$k$/, @{$keys}
+            or die "Error: key $k in an --auxinput option does not have a correspondence in the FCL config\n";
+    }
 }
 
-foreach my $k (@auxkeys) {
-    grep /^$k$/, @mixinputkeys
-        or die "Error: key $k in an --auxinput option does not have a correspondence in the FCL config\n";
-}
+validateAuxKeys(\@mixinputkeys, \@auxin_specs);
 
 # auxin info to put into json
 my %auxintable;
