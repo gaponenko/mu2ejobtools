@@ -42,6 +42,8 @@ use constant fclkey_outModFMT => 'outputs.%s.fileName';
 use constant filename_tarball => 'code.tar';
 use constant filename_tarsetup => 'Code/setup.sh';
 
+use constant no_output => '/dev/null';
+
 #================================================================
 sub usage() {
     my $self = basename($0);
@@ -566,7 +568,7 @@ if($ntsoutstr ne '') {
     # output, art users set TFileService.fileName to /dev/null
     # For data handling purposes this is equivalent to not having TFileService
     # in the config.
-    if($ntsoutstr ne '/dev/null') {
+    if($ntsoutstr ne no_output) {
         my $ntsfn = Mu2eFilename->parse($ntsoutstr);
 
         die "Bad histo file name $ntsoutstr: expect data tier nts\n" unless $ntsfn->tier eq 'nts';
@@ -617,16 +619,18 @@ foreach my $mod (@active_outmods) {
     chomp $outfile;
     print "$mod => $outfile\n" if $verbose;
 
-    my $fn = Mu2eFilename->parse($outfile);
+    if($outfile ne no_output) {
+        my $fn = Mu2eFilename->parse($outfile);
 
-    # there are multiple valid tiers, do not check
-    $fn->owner($dsowner);
-    $fn->description($description) if $override_output_desc;
-    $fn->configuration($dsconf);
-    # the sequencer to be set by the grid process
-    die "Bad output file name $outfile: expect extension .art\n" unless $fn->extension eq 'art';
+        # there are multiple valid tiers, do not check
+        $fn->owner($dsowner);
+        $fn->description($description) if $override_output_desc;
+        $fn->configuration($dsconf);
+        # the sequencer to be set by the grid process
+        die "Bad output file name $outfile: expect extension .art\n" unless $fn->extension eq 'art';
 
-    $outtable{$outfilekey} = $fn->basename;
+        $outtable{$outfilekey} = $fn->basename;
+    }
 }
 
 $tbs{'outfiles'} = \%outtable if %outtable;
