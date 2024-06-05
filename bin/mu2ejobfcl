@@ -113,7 +113,8 @@ die "Error: --index must be non-negative, got: $index\n" if $index < 0;
 
 my $jp = Mu2eJobPars->new($pfname);
 
-$sp->initialize([$jp->input_datasets()], \%opt);
+eval { $sp->initialize([$jp->input_datasets()], \%opt); };
+die $@ . "\nTry the --help option.\n" if $@;
 
 #================================================================
 # is the index in range?
