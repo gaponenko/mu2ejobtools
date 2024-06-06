@@ -12,6 +12,7 @@ use Digest::MD5; # Archive::Tar should have requested this itself...
 use JSON;
 
 use Mu2eFilename;
+use mu2ejobtools;
 
 #================================================================
 # Define strings that are used in multiple places
@@ -100,9 +101,7 @@ sub njobs {
         my ($k, $v) = %$in;
         my $merge = $v->[0];
         my $files = $v->[1];
-        my $nf = scalar(@$files);
-        use integer;
-        $njobs = $nf/$merge + (($nf % $merge) ? 1 : 0);
+        $njobs = calculate_njobs($merge, $files);
     }
     return $njobs;
 }

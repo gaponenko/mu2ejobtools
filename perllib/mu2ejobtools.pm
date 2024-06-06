@@ -7,6 +7,7 @@ package mu2ejobtools;
 use parent qw(Exporter);
 
 use strict;
+use warnings;
 use Carp;
 
 # top level key name in json files read and written by mu2ejobsub and
@@ -24,6 +25,19 @@ sub doubleQuote {
     return $res[0];
 }
 
+##================================================================
+## the args are numFilePerJob and the filelist ref
+sub calculate_njobs {
+    my ($merge, $files) = @_;
+
+    my $nf = scalar(@$files);
+
+    use integer;
+    my $njobs = $nf/$merge + (($nf % $merge) ? 1 : 0);
+
+    return $njobs;
+}
+
 #================================================================
 our $VERSION = '1.00';
 
@@ -31,6 +45,7 @@ our @EXPORT   = qw(
     json_key_jobset
     json_key_inspec
     doubleQuote
+    calculate_njobs
     );
 
 #================================================================

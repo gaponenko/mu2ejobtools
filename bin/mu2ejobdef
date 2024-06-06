@@ -558,10 +558,7 @@ elsif($srctype eq 'SamplingInput') {
     # Check that input file list sizes make sense
     my $nj0; # num jobs if limited by $samplingin_specs[0]
     foreach my $s (@samplingin_specs) {
-        my $merge = $s->numFilesPerJob;
-        my $numfiles = scalar(@{$s->filenames});
-        use integer;
-        my $njobs = $numfiles/$merge + (($numfiles % $merge) ? 1 : 0);
+        my $njobs = calculate_njobs($s->numFilesPerJob, $s->filenames);
         $nj0 = $njobs unless defined $nj0;
         die "Error: can not use all the input files provided: ".
             "the required number of jobs = $nj0 for dataset tag ".
