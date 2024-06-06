@@ -39,6 +39,8 @@ use constant fclkey_randomSeed => 'services.SeedService.baseSeed';
 use constant fclkey_TFileServiceFN => 'services.TFileService.fileName';
 use constant fclkey_outModFMT => 'outputs.%s.fileName';
 
+use constant fclkey_samplingInFMT => 'source.dataSets.%s.fileNames';
+
 use constant filename_tarball => 'code.tar';
 use constant filename_tarsetup => 'Code/setup.sh';
 
@@ -57,8 +59,9 @@ Usage:
          [--dsowner=<string>] \\
          [--override-output-description] \\
          { --inputs=<list-file-name> --merge-factor=<int> |\\
-           --run-number=<int> --events-per-job=<int> }\\
+           --run-number=<int> [--events-per-job=<int>] }\\
          [--auxinput=<numFiles>:<fclVarName>:<filelist>] \\
+         [--samplinginput=<numFiles>:<dsname>:<filelist>] \\
          [--verbose] [--help] \\
          {--embed|--include} template-fcl-file
 
@@ -125,16 +128,21 @@ and source configuration is set appropriately in output fcl files.
 If this script detects the presence of SeedService in the
 configuration, a unique seed will be defined for each grid job.
 
-The --auxinput option sets the given fcl file key so that it
-points to the files in the given filelist.  The numFiles parameter,
-which can be a natural number or the literal 'all', specifies how
-many randomly selected files from the list should be used per job.
-The --auxinput option can be repeated several times, the effect is
-cumulative.
+The --auxinput option sets the given fcl file key so that it points to
+the files in the given filelist.  It is used to configure event mixing
+modules.  The numFiles parameter, which can be a natural number or the
+literal 'all', specifies how many randomly selected files from the
+list should be used per job.  The --auxinput option can be repeated
+several times, the effect is cumulative.
 
-All job input files mentioned by the --inputs or --auxinput option
-must be listed by their base name, without any directory or protocol
-prefix.
+The --samplinginput option configures the SamplingInput type
+source.   The syntax is similar to SamplingInput, but it uses
+dataset identifiers listed in the source module configuration
+in the template fcl file.
+
+All the files mentioned by the --inputs, --auxinput,
+or --samplinginput option must be listed by their base name, without
+any directory or protocol prefix.
 
 The square brackets [] in the explanations above denote optional
 settings, and {alternative1|alternative2} constructs denote mutually
@@ -321,12 +329,14 @@ sub validateAuxKeys {
 }
 
 #================================================================
+# This sub checks a subset of options that are mentioned
+# in %defs, it ignores entries in %opt it does not know about.
 sub validateOptionsForSourceType {
     my ($srctype, $opt) = @_;
 
     use Class::Struct SrcOpts => [ required => '@', allowed => '@' ];
 
-    my $fileInputsDef = SrcOpts->new(equired => ['inputs', 'merge-factor'],
+    my $fileInputsDef = SrcOpts->new(required => ['inputs', 'merge-factor'],
                                      allowed => [ 'description', 'auto-description' ]);
 
     my %defs = (
@@ -337,6 +347,12 @@ sub validateOptionsForSourceType {
         'RootInput' => $fileInputsDef,
         'FromCorsikaBinary' => $fileInputsDef,
         'FromSTMTestBeamData' => $fileInputsDef,
+
+        'SamplingInput' => SrcOpts->new(required => [ 'run-number', 'description', 'samplinginput' ],
+                                     allowed => []
+        ),
+
+
         );
 
     my @allOpts = map { @{$_->required}, @{$_->allowed} } values %defs;
@@ -344,12 +360,21 @@ sub validateOptionsForSourceType {
     # remove duplicates
     @allOpts = keys { map { $_ => 1 } @allOpts };
 
-    my $ss = $defs{$srctype};
+    my $ss = $defs{$srctype} or die "Unknown source type $srctype";
+
+    # single-valued options can be checked with simple "defined", but
+    # we also have the list-values --samplinginput
+    sub nonempty {
+        my ($x) = @_;
+        return 0 unless defined $x;
+        return 1 unless ref $x eq 'ARRAY';
+        return 0 + @$x;
+    }
 
     # verify that all the required options are present
     foreach my $k (@{$ss->required}) {
         die "Error: --$k must be specified and nonempty for fcl files that use source type $srctype.  Try the --help option.\n"
-            unless defined $opt->{$k};
+            unless nonempty $opt->{$k};
     }
 
     # veto incompatible options
@@ -357,7 +382,7 @@ sub validateOptionsForSourceType {
         next if grep /^$k$/, @{$ss->allowed};
         next if grep /^$k$/, @{$ss->required};
         die "Error: --$k is not compatible with fcl files that use source type $srctype.  Try the --help option.\n"
-            if defined $opt->{$k};
+            if nonempty $opt->{$k};
     }
 }
 
@@ -369,9 +394,11 @@ my $defaultUser = getpwuid($EFFECTIVE_USER_ID);
 $defaultUser =~ s/^mu2epro$/mu2e/; # standard datasets should be owned by "mu2e", not "mu2epro"
 
 my @auxinputStrSpecs;
+my @samplinginputStrSpecs;
 
 my %opt = ('dsowner' =>  $defaultUser,
            'auxinput' => \@auxinputStrSpecs,
+           'samplinginput' => \@samplinginputStrSpecs,
     );
 
 # Process command line opts.
@@ -388,6 +415,7 @@ GetOptions(\%opt,
            'run-number=i',
            'events-per-job=i',
            'auxinput=s',
+           'samplinginput=s',
            'embed',
            'include',
            'help',
@@ -464,7 +492,7 @@ foreach my $i ('trigger_paths', 'end_paths') {
 #----------------------------------------------------------------
 my $srctype = `fhicl-get --atom-as string source.module_type $templateresolved 2>/dev/null`;
 if($?) {
-    die "Error running fhicl-get to determine source.module_type.\n";
+    die "Error running fhicl-get to determine source.module_type in $templateresolved.\n";
 }
 chomp $srctype;
 print "Got srctype = $srctype\n" if $verbose;
@@ -507,6 +535,48 @@ elsif(($srctype eq 'RootInput') or ($srctype eq 'FromCorsikaBinary') or ($srctyp
     #my %intable; $intable{'source.fileNames'} = [ $merge, \@infiles ];
 
     $tbs{'inputs'} = { 'source.fileNames' => [ $merge, \@infiles ] };
+}
+#----------------------------------------------------------------
+elsif($srctype eq 'SamplingInput') {
+
+    # NB: event_id must be defined in JSON so that
+    # mu2ejobfcl will properly set the subrun number
+    $tbs{'event_id'} = {
+        'source.firstRun' => $opt{'run-number'},
+    };
+
+    #  Get dataset IDs configured in input FCL
+    my @dstags = `fhicl-get --names-in source.dataSets $templateresolved 2>/dev/null`;
+    if($?) {
+        die "Error running fhicl-get to list names in source.dataSets for $templateresolved.\n";
+    }
+    chomp @dstags;
+
+    my @samplingin_specs = parseAuxSpecs('samplinginput', \@samplinginputStrSpecs);
+    validateAuxKeys('samplinginput', \@dstags, \@samplingin_specs);
+
+    # Check that input file list sizes make sense
+    my $nj0; # num jobs if limited by $samplingin_specs[0]
+    foreach my $s (@samplingin_specs) {
+        my $merge = $s->numFilesPerJob;
+        my $numfiles = scalar(@{$s->filenames});
+        use integer;
+        my $njobs = $numfiles/$merge + (($numfiles % $merge) ? 1 : 0);
+        $nj0 = $njobs unless defined $nj0;
+        die "Error: can not use all the input files provided: ".
+            "the required number of jobs = $nj0 for dataset tag ".
+            $samplingin_specs[0]->fclkey .
+            " does not match njobs = $njobs for ".$s->fclkey."\n"
+            unless $nj0 == $njobs;
+    }
+
+    # sampling input info to put into json
+    my %samplingintable;
+    foreach my $s (@samplingin_specs) {
+        my $inputkey = sprintf fclkey_samplingInFMT, $s->fclkey;
+        $samplingintable{$inputkey} = [ $s->numFilesPerJob, $s->filenames];
+    }
+    $tbs{'samplinginput'} = \%samplingintable;
 }
 #----------------------------------------------------------------
 else {
