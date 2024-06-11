@@ -512,6 +512,7 @@ if($srctype eq 'EmptyEvent') {
         'source.maxEvents' => $opt{'events-per-job'},
     };
 
+    $tbs{'subrunkey'} = 'source.firstSubRun';
 }
 #----------------------------------------------------------------
 elsif(($srctype eq 'RootInput') or ($srctype eq 'FromCorsikaBinary') or ($srctype eq 'FromSTMTestBeamData')) {
@@ -535,15 +536,15 @@ elsif(($srctype eq 'RootInput') or ($srctype eq 'FromCorsikaBinary') or ($srctyp
     #my %intable; $intable{'source.fileNames'} = [ $merge, \@infiles ];
 
     $tbs{'inputs'} = { 'source.fileNames' => [ $merge, \@infiles ] };
+    $tbs{'subrunkey'} = ''; # subrun comes from the inputs
 }
 #----------------------------------------------------------------
 elsif($srctype eq 'SamplingInput') {
 
-    # NB: event_id must be defined in JSON so that
-    # mu2ejobfcl will properly set the subrun number
     $tbs{'event_id'} = {
-        'source.firstRun' => $opt{'run-number'},
+        'source.run' => $opt{'run-number'},
     };
+    $tbs{'subrunkey'} = 'source.subRun';
 
     #  Get dataset IDs configured in input FCL
     my @dstags = `fhicl-get --names-in source.dataSets $templateresolved 2>/dev/null`;

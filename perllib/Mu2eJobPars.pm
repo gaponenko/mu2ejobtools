@@ -103,6 +103,17 @@ sub njobs {
         my $files = $v->[1];
         $njobs = calculate_njobs($merge, $files);
     }
+    elsif(my $sin = $tbs->{'samplinginput'}) {
+        # consistency checks are front-loaded and done
+        # in mu2ejobdef, do not repeat them here
+
+        keys %$sin; # reset the iterator
+        my ($k, $v) = each(%$sin);
+        my $merge = $v->[0];
+        my $filelist = $v->[1];
+        $njobs = calculate_njobs($merge, $filelist);
+    }
+
     return $njobs;
 }
 
@@ -128,6 +139,17 @@ sub input_datasets {
     if(my $au = $tbs->{'auxin'}) {
         keys %$au; # reset the iterator
         while(my ($k, $v) = each(%$au)) {
+            my $filelist = $v->[1];
+            foreach my $i (@$filelist) {
+                my $f = Mu2eFilename->parse($i);
+                ++$datasets{$f->dataset->dsname};
+            }
+        }
+    }
+
+    if(my $su = $tbs->{'samplinginput'}) {
+        keys %$su; # reset the iterator
+        while(my ($k, $v) = each(%$su)) {
             my $filelist = $v->[1];
             foreach my $i (@$filelist) {
                 my $f = Mu2eFilename->parse($i);
@@ -285,11 +307,50 @@ sub job_aux_inputs {
 }
 
 #================================================================
+sub job_sampling_inputs {
+    my ($self, $index) = @_;
+
+    my $res = {};
+
+    if(my $au = $self->{'json'}->{'tbs'}->{'samplinginput'}) {
+
+        keys %$au; # reset the iterator
+        while(my ($k, $v) = each (%$au)) {
+
+            my $nreq = $v->[0];
+            my $filelist = $v->[1];
+
+            # zero means take all files
+            $nreq = scalar(@$filelist) unless $nreq;
+
+            # SamplingInput files are used like sequentially, similar
+            # to primary but not aux inputs.
+            #
+            # skip the first $index * $nreq files,
+            # then take what is left, up to $nreq
+            my $nf = scalar(@$filelist);
+            my $first = $index*$nreq;
+            my $last = $first + $nreq - 1;
+            $last = $nf - 1 if $nf - 1 < $last;
+
+            die "job_sampling_inputs(): invalid index $index\n"
+                unless $first <= $last; # no emtpy lists
+
+            $res->{$k} = [ @$filelist[$first .. $last] ];
+        }
+    }
+
+    return $res;
+}
+
+#================================================================
 sub job_inputs {
     my ($self, $index) = @_;
 
     return { %{$self->job_primary_inputs($index)},
-                 %{$self->job_aux_inputs($index)} };
+             %{$self->job_aux_inputs($index)},
+             %{$self->job_sampling_inputs($index)},
+    };
 }
 
 #================================================================
@@ -308,7 +369,7 @@ sub sequencer {
         return $seqs[0];
     }
     elsif(my $evid = $self->{'json'}->{'tbs'}->{'event_id'}) {
-        my $run = $evid->{'source.firstRun'}
+        my $run = $evid->{'source.firstRun'} // $evid->{'source.run'}
         or die "Error: get_sequencer(): can not get source.firstRun from event_id\n";
         my $subrun = $index;
         return sprintf('%06d_%08d', $run, $subrun);
@@ -349,7 +410,19 @@ sub job_event_settings {
             $res->{$k} = $evid->{$k};
         }
 
-        $res->{'source.firstSubRun'} = $index;
+        my $srk = $self->{'json'}->{'tbs'}->{'subrunkey'};
+        if(defined $srk) {
+            # New format jobdef files have subrunkey defined, see
+            # if we need to set subrun for this job
+           if($srk ne '') {
+                $res->{$srk} = $index;
+            }
+        }
+        else {
+            # We are working with an old format jobdef.
+            # Since $evid is defined, we have to set
+            $res->{'source.firstSubRun'} = $index;
+        }
     }
 
     return $res;
@@ -424,13 +497,16 @@ $index defined by the par file.  Any of the returned hashes may be empty,
 meaning this group of FCL setting is not needed.
 
     $jp->job_inputs($index);
+
     $jp->job_primary_inputs($index);
     $jp->job_aux_inputs($index);
+    $jp->job_sampling_inputs($index);
+
     Returns a reference to a hash.  The keys of the hash are FCL keys
     for the inputs (one or zero for primary_inputs(), arbitrary number
     for aux_inputs).  The values are references to arrays that contain
-    basenames of the input files.  job_inputs() is a union of
-    primary_inputs() and aux_inputs().
+    basenames of the input files.  job_inputs() is a union of primary,
+    aux, and sampling inputs.
 
     $jp->sequencer($index)
     The sequencer, see https://mu2ewiki.fnal.gov/wiki/FileNames#sequencer
