@@ -358,7 +358,8 @@ sub validateOptionsForSourceType {
     my @allOpts = map { @{$_->required}, @{$_->allowed} } values %defs;
 
     # remove duplicates
-    @allOpts = keys { map { $_ => 1 } @allOpts };
+    my %tmpopts = map { $_ => 1 } @allOpts ;
+    @allOpts = keys(%tmpopts);
 
     my $ss = $defs{$srctype} or die "Unknown source type $srctype";
 
