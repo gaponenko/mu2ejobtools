@@ -136,7 +136,7 @@ list should be used per job.  The --auxinput option can be repeated
 several times, the effect is cumulative.
 
 The --samplinginput option configures the SamplingInput type
-source.   The syntax is similar to SamplingInput, but it uses
+source.   The syntax is similar to --auxinput, but it uses
 dataset identifiers listed in the source module configuration
 in the template fcl file.
 
