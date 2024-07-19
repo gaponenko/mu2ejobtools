@@ -538,12 +538,17 @@ elsif(($srctype eq 'RootInput') or ($srctype eq 'FromCorsikaBinary') or ($srctyp
 
     $tbs{'inputs'} = { 'source.fileNames' => [ $merge, \@infiles ] };
     $tbs{'subrunkey'} = ''; # subrun comes from the inputs
+
+    $tbs{'event_id'} = {
+        'source.maxEvents' => '2147483647', # RootInput accepts '-1', but the STM source does not
+    } unless $srctype eq 'FromCorsikaBinary'; # that source does not limit events, no need to override
 }
 #----------------------------------------------------------------
 elsif($srctype eq 'SamplingInput') {
 
     $tbs{'event_id'} = {
         'source.run' => $opt{'run-number'},
+        'source.maxEvents' => '2147483647', # max_int, the source does not accept '-1'
     };
     $tbs{'subrunkey'} = 'source.subRun';
 
