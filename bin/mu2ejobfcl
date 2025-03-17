@@ -56,26 +56,42 @@ sub format_filenames($$) {
 }
 
 #================================================================
+# This sub figures out the desired job index and handles consistency
+# checks on the relevant user inputs.
+
 sub find_index {
-    my ($jp, $outfn) = @_;
-    die "Error: either --index or --target must be specified.\n"
-        unless defined $outfn;
+    my ($jp, $opt) = @_;
 
-    my $fn = Mu2eFilename->parse($outfn);
+    #----------------------------------------------------------------
+    if(defined $opt->{'index'}) {
+        die "Error: --index and --target are mutually exclusive\n"
+            if defined $opt->{'target'};
 
-    my $seq = $fn->sequencer();
-    my $index = $jp->index_from_sequencer($seq);
-
-    # Getting here means the sequencer belongs to this job set.  Let's
-    # check that the full target file name matches what this job will
-    # produce.
-
-    my $out = $jp->job_outputs($index);
-    foreach my $o (values %$out) {
-        return $index if $o eq $outfn;
+        return $opt->{'index'};
     }
 
-    die "Error: file \"$outfn\" is not produced by any job in this job set.\n";
+    #----------------------------------------------------------------
+    if(defined $opt->{'target'}) {
+        my $outfn = $opt->{'target'};
+
+        my $fn = Mu2eFilename->parse($outfn);
+        my $seq = $fn->sequencer();
+        my $index = $jp->index_from_sequencer($seq);
+
+        # Getting here means the sequencer belongs to this job set.  Let's
+        # check that the full target file name matches what this job will
+        # produce.
+
+        my $out = $jp->job_outputs($index);
+        foreach my $o (values %$out) {
+            return $index if $o eq $outfn;
+        }
+
+        die "Error: file \"$outfn\" is not produced by any job in this job set.\n";
+    }
+
+    #----------------------------------------------------------------
+    die "Error: either --index or --target must be specified.\n";
 }
 
 #================================================================
@@ -135,11 +151,7 @@ die "Error: $pfname is not a file\n" unless -f $pfname;
 die "Error: file $pfname is not readable\n" unless -r $pfname;
 my $jp = Mu2eJobPars->new($pfname);
 
-
-die "Error: --index and --target are mutually exclusive\n"
-    if defined $opt{'index'} and defined $opt{'target'};
-
-my $index = $opt{'index'} // find_index($jp, $opt{'target'});
+my $index = find_index($jp, \%opt);
 
 die "Error: --index must be non-negative, got: $index\n" if $index < 0;
 
