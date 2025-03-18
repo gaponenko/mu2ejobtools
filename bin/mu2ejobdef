@@ -62,17 +62,18 @@ Usage:
            --run-number=<int> [--events-per-job=<int>] }\\
          [--auxinput=<numFiles>:<fclVarName>:<filelist>] \\
          [--samplinginput=<numFiles>:<dsname>:<filelist>] \\
+         [--outdir=<existing-directory>] \\
          [--verbose] [--help] \\
          {--embed|--include} template-fcl-file
 
 The mu2ejobdef script packs parameters that define a set of mu2e
-Offline grid jobs into a cnf.tar file.  The name of the output file,
-in the current directory, will be constructed using --description (for the
-description field), --dsconf, and other pieces of information
-according to the Mu2e convention, see
-https://mu2ewiki.fnal.gov/wiki/FileNames
-The sequencer field for job names is not meaningful and
-is always set to "0".
+Offline grid jobs into a cnf.tar file.  The name of the output file
+will be constructed using --description (for the description field),
+--dsconf, and other pieces of information according to the Mu2e
+convention, see https://mu2ewiki.fnal.gov/wiki/FileNames The sequencer
+field for job names is not meaningful and is always set to "0".
+By default the output file will be written to the current directory,
+but this can be changed with the --outdir option.
 
 The --auto-description option can be used only with --inputs and sets
 the description field of our cnf.tar file to that of the --inputs;
@@ -400,6 +401,7 @@ my @samplinginputStrSpecs;
 my %opt = ('dsowner' =>  $defaultUser,
            'auxinput' => \@auxinputStrSpecs,
            'samplinginput' => \@samplinginputStrSpecs,
+           'outdir' => '.',
     );
 
 # Process command line opts.
@@ -419,6 +421,7 @@ GetOptions(\%opt,
            'samplinginput=s',
            'embed',
            'include',
+           'outdir=s',
            'help',
            'verbose',
     )
@@ -838,7 +841,9 @@ if($code) {
 #================================================================
 # write out the output
 
-my $outfilename = $jobname;
+my $outdir = $opt{'outdir'};
+$outdir =~ s|/$||;
+my $outfilename =  $outdir. '/' . $jobname;
 
 { no autodie qw(sysopen);
   sysopen(my $ofh, $outfilename, O_CREAT | O_EXCL | O_WRONLY)
