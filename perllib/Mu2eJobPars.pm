@@ -423,6 +423,32 @@ sub index_from_sequencer {
 }
 
 #================================================================
+sub index_from_source_file {
+    my ($self, $srcfn) = @_;
+
+    if(my $in = $self->{'json'}->{'tbs'}->{'inputs'}) {
+        my ($k, $v) = %$in;
+        my $merge = $v->[0];
+        my $filelist = $v->[1];
+
+        my $fileindex;
+        for(my $i=0; $i < scalar @$filelist; ++$i) {
+            if($filelist->[$i] eq $srcfn) {
+                $fileindex = $i;
+                last;
+            }
+        }
+
+        if(defined $fileindex) {
+            use integer;
+            return $fileindex / $merge;
+        }
+    }
+
+    croak "This jobset does not use \"$srcfn\" as a primary input file\n";
+}
+
+#================================================================
 sub job_outputs {
     my ($self, $index) = @_;
 
@@ -558,6 +584,10 @@ meaning this group of FCL setting is not needed.
     $jp->index_from_sequencer($seq)
     Returns the index of the job in this jobset that corresponds to the
     sequencer.  Croaks if the sequencer is not produced by the job set.
+
+    $jp->index_from_source_file($srcfn)
+    Returns the index of the job in this jobset that uses the given
+    filename as a primary input. Croaks if none of the jobs use that file.
 
     $jp->job_outputs($index);
     Returns a reference to a hash mapping FCL keys to output file names.

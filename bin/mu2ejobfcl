@@ -67,11 +67,17 @@ sub find_index {
         die "Error: --index and --target are mutually exclusive\n"
             if defined $opt->{'target'};
 
+        die "Error: --index and --source are mutually exclusive\n"
+            if defined $opt->{'source'};
+
         return $opt->{'index'};
     }
 
     #----------------------------------------------------------------
     if(defined $opt->{'target'}) {
+        die "Error: --target and --source are mutually exclusive\n"
+            if defined $opt->{'source'};
+
         my $outfn = $opt->{'target'};
 
         my $fn = Mu2eFilename->parse($outfn);
@@ -91,7 +97,13 @@ sub find_index {
     }
 
     #----------------------------------------------------------------
-    die "Error: either --index or --target must be specified.\n";
+    if(defined $opt->{'source'}) {
+        my $infn = $opt->{'source'};
+        return $jp->index_from_source_file($infn);
+    }
+
+    #----------------------------------------------------------------
+    die "Error: one of --index, --target, or --source must be specified.\n";
 }
 
 #================================================================
@@ -108,14 +120,17 @@ sub usage() {
 Usage:
         $self \\
            --jobdef=cnf.tar \\
-           {--index=<uint>|--target=<outfile-name>} \\
+           {--index=<uint>|\\
+            --target=<outfile-name>|\\
+            --source=<input-file-name>} \\
 $inspec_opts
            [-h|--help]
 
 This script prints out fcl config for a job with the given index in
-the set of jobs defined by the jobdef.  Alternatively, one can specify
-the *exact* name of of any of the of the output files produced by the
-job instead of the numeric index using the --target option.
+the set of jobs defined by the jobdef.  Instead of a numeric index,
+one can identify the desired job by specifying the *exact* name of any
+output files produced by the job with --target, or an input file name
+with the --source option.
 
 If the job needs any inputs, their location and access protocol must
 be specified using the following options:
@@ -132,6 +147,7 @@ GetOptions(\%opt,
            'jobdef=s',
            'index=i',
            'target=s',
+           'source=s',
            $sp->option_defs(),
            'help',
     )
